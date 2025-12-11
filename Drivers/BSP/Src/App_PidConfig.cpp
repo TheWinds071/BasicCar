@@ -42,7 +42,7 @@ void App_Pid_Init(void) {
     PidConfig cfgFwd = pidStore.get(PID_ID_FORWARD);
     LineFollower_SetPID(PID_ID_FORWARD, cfgFwd.kp, cfgFwd.ki, cfgFwd.kd);
     
-    RTT_Log("[System] Applied PID: Turn P=%.3f I=%.3f D=%.3f | Forward P=%.3f I=%.3f D=%.3f\r\n",
+    RTT_Log("[System] Applied PID: Turn P=%f I=%f D=%f | Forward P=%f I=%f D=%f\r\n",
             cfgTurn.kp, cfgTurn.ki, cfgTurn.kd,
             cfgFwd.kp, cfgFwd.ki, cfgFwd.kd);
 }
@@ -77,7 +77,7 @@ void App_Pid_Set_Temp(uint8_t id, float kp, float ki, float kd) {
     // 2. 立即应用到电机控制器
     LineFollower_SetPID(id, kp, ki, kd);
     
-    RTT_Log("[Tuning] Temp PID Set: P=%.3f I=%.3f D=%.3f (RAM only)\r\n", kp, ki, kd);
+    RTT_Log("[Tuning] Temp PID Set: P=%f I=%f D=%f (RAM only)\r\n", kp, ki, kd);
 }
 
 void App_Pid_Save(void) {
