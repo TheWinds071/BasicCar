@@ -284,7 +284,7 @@ LineFollower_OnTimer()
 ### 初次使用
 
 1. **烧录程序**: 使用 STM32CubeProgrammer 或 OpenOCD 烧录固件
-2. **连接串口**: 波特率默认配置 (查看 .ioc 文件)
+2. **连接串口**: USART3，波特率 115200，8N1 格式
 3. **放置小车**: 将小车放在黑色寻线轨道上
 4. **观察运行**: 小车应自动沿轨道行驶
 
@@ -327,7 +327,7 @@ _cache.pids[PID_ID_TURN] = {0.1f, 0.0f, 0.2f};
 
 ### 编译环境
 
-- **工具链**: ARM GCC (arm-none-eabi-gcc)
+- **工具链**: ARM GCC (arm-none-eabi-gcc) 10.3+ 推荐
 - **构建系统**: CMake 3.22+
 - **IDE**: CLion / VS Code (推荐)
 
@@ -456,7 +456,7 @@ TheWinds071
 
 ## 更新日志
 
-### 2025-01-XX
+### 2025-12-11
 - 初始版本发布
 - 实现基本寻线功能
 - 添加 PID 参数存储
