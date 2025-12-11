@@ -21,8 +21,14 @@ extern "C" {
     // 传入接收到的字符串，例如 "PID 0.5 0.0 1.2" 或 "SAVE"
     void App_Pid_Process_Command(char* cmd_buffer);
 
+    void App_Serial_Init(void);
+
+
+
 #ifdef __cplusplus
 }
 #endif
+
+void App_Serial_Loop(void);
 
 #endif

@@ -6,6 +6,7 @@
 
 // 定义 ID: 目前寻线只需要一个转向 PID
 #define PID_ID_TURN  0
+#define PID_ID_FORWARD 1     // 预留前进 PID
 #define MAX_PID_NUM  4       // 预留 4 组
 #define PID_MAGIC    0x5AA5  // 校验魔数
 

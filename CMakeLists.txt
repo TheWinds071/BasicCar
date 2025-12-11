@@ -44,6 +44,7 @@ add_executable(${CMAKE_PROJECT_NAME}
         Drivers/BSP/Inc/PidStorage.hpp
         Drivers/BSP/Inc/App_PidConfig.h
         Drivers/BSP/Src/App_PidConfig.cpp
+        Drivers/BSP/Inc/UartRingBuffer.hpp
 )
 
 # Add STM32CubeMX generated sources

@@ -29,5 +29,7 @@ void App_Start(void) {
 
         // 扫描按键
         btn.scan();
+
+        App_Serial_Loop();
     }
 }

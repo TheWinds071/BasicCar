@@ -5,6 +5,8 @@
 #include "Pid.hpp" // 包含刚才定义的模板
 #include <cmath>
 
+#include "PidStorage.hpp"
+
 // ================== 配置参数 ==================
 #define LF_SENSOR_MASK   0xFD00  // PA15-PA10, PA8
 //  APB2=240M, 20kHz -> ARR=11999
@@ -18,14 +20,12 @@ private:
     uint32_t _pwm_arr;
 
     // === 核心变化：引入 PID 对象 ===
-    PidController<float> _pid;
+    PidController<float> _pidTurn;
+    PidController<float> _pidForward;
 
     float _base_speed; // 基础速度 (0.0 - 1.0)
 
     // 内部函数：设置单边电机 (DRV8870 慢衰减)
-
-
-public:
     void setSingleMotor(uint32_t ch1, uint32_t ch2, float speed) {
         if (speed > 1.0f) speed = 1.0f;
         if (speed < -1.0f) speed = -1.0f;
@@ -42,17 +42,17 @@ public:
             __HAL_TIM_SET_COMPARE(_htim, ch2, _pwm_arr);
         }
     }
+
+public:
+
     /**
      * @brief 构造函数
      * @param kp, ki, kd PID 参数
      */
-    LineFollower(TIM_HandleTypeDef* htim,
-                 uint32_t l1, uint32_t l2, uint32_t r1, uint32_t r2,
-                 float kp, float ki, float kd)
-        : _htim(htim),
-          _ch_L1(l1), _ch_L2(l2), _ch_R1(r1), _ch_R2(r2),
-          // 初始化 PID: 最小输出 -1.0, 最大输出 1.0
-          _pid(kp, ki, kd, -1.0f, 1.0f),
+    LineFollower(TIM_HandleTypeDef* htim, uint32_t l1, uint32_t l2, uint32_t r1, uint32_t r2)
+        : _htim(htim), _ch_L1(l1), _ch_L2(l2), _ch_R1(r1), _ch_R2(r2),
+          _pidTurn(0.1f, 0.0f, 0.2f, -1.0f, 1.0f),      // 初始化转向 PID
+          _pidForward(1.0f, 0.0f, 0.0f, 0.0f, 1.0f),    // 【新增】初始化前进 PID (输出限幅 0~1.0)
           _base_speed(0.0f)
     {
         _pwm_arr = 0;
@@ -73,9 +73,14 @@ public:
         _base_speed = speed;
     }
 
-    // 允许外部动态调整 PID (例如通过串口指令)
-    void tunePid(float kp, float ki, float kd) {
-        _pid.setTunings(kp, ki, kd);
+    // === 修改：支持指定 ID 调参 ===
+    void tunePid(uint8_t id, float kp, float ki, float kd) {
+        if (id == PID_ID_TURN) {
+            _pidTurn.setTunings(kp, ki, kd);
+        }
+        else if (id == PID_ID_FORWARD) {
+            _pidForward.setTunings(kp, ki, kd);
+        }
     }
 
     // === 中断调用核心 ===
@@ -92,7 +97,7 @@ public:
             setSingleMotor(_ch_L1, _ch_L2, 0.0f);
             setSingleMotor(_ch_R1, _ch_R2, 0.0f);
             // 可选：重置 PID 积分项，防止回到线上时突然猛冲
-            _pid.reset();
+            _pidTurn.reset();
             return;
         }
 
@@ -110,7 +115,7 @@ public:
 
         // 3. 使用 PID 模板计算转向值
         // 目标是 0.0 (中心)，当前是 position_error
-        float turn_adjust = _pid.compute(0.0f, position_error);
+        float turn_adjust = _pidTurn.compute(0.0f, position_error);
 
         // 4. 混合速度
         // 如果 turn_adjust > 0，说明偏右(error>0)，需要左转(左轮减速，右轮加速)

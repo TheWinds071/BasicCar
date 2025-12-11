@@ -13,7 +13,7 @@ void LineFollower_Init(void) {
     // 假设电机接在 TIM1
     // 左电机: CH1, CH2
     // 右电机: CH3, CH4
-    static LineFollower static_instance(&htim1, TIM_CHANNEL_1, TIM_CHANNEL_2, TIM_CHANNEL_3, TIM_CHANNEL_4,0.0f,0.0f,0.0f);
+    static LineFollower static_instance(&htim1, TIM_CHANNEL_1, TIM_CHANNEL_2, TIM_CHANNEL_3, TIM_CHANNEL_4);
     controller = &static_instance;
 
     // 设置基础速度 (0.0 - 1.0)
@@ -31,9 +31,9 @@ void LineFollower_OnTimer(void) {
 }
 
 // 动态调整 PID 接口
-void LineFollower_SetPID(float kp, float ki, float kd) {
+void LineFollower_SetPID(uint8_t id,float kp, float ki, float kd) {
     if (controller != nullptr) {
-        controller->tunePid(kp, ki, kd);
+        controller->tunePid(id, kp, ki, kd);
     }
 }
 
