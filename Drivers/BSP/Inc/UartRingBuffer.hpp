@@ -17,8 +17,6 @@ public:
         : _huart(huart), _rx_buffer(buffer), _buf_size(size), _tail(0), _line_idx(0) {}
 
     void init() {
-        // H7 Cache 失效
-        SCB_InvalidateDCache_by_Addr((uint32_t*)_rx_buffer, _buf_size);
         // 启动 DMA
         HAL_UART_Receive_DMA(_huart, _rx_buffer, _buf_size);
     }
@@ -31,7 +29,6 @@ public:
 
         bool cmd_found = false;
         while (_tail != head) {
-            SCB_InvalidateDCache_by_Addr((uint32_t*)&_rx_buffer[_tail], 1);
             uint8_t byte = _rx_buffer[_tail];
 
             if (byte == '\n' || byte == '\r') {
