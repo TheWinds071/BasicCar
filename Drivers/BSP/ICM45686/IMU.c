@@ -15,6 +15,9 @@
 #include "inv_imu_driver.h"
 #include <math.h> // 必须包含 math.h 以支持 sqrtf, atan2f, asinf
 
+#include "SEGGER_RTT.h"
+#include "stm32h7xx_hal.h"
+
 //#include "eeprom.h"
 /* XYZ结构体 */
 
@@ -73,7 +76,7 @@ void IMU_init(void)
         HAL_Delay(100);
 		return;
 	}
-	printf("IMU ERROR!!\r\n");
+	RTT_Log("IMU ERROR!!\r\n");
 }
 
 static double Gyro_fill[3][300];

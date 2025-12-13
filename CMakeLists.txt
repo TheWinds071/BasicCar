@@ -63,6 +63,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         Core/Src/app_entry.cpp
         Drivers/BSP/Src/key_driver.c
         Drivers/BSP/Src/button.cpp
+        Drivers/BSP/ICM45686/IMU.c
+        Drivers/BSP/ICM45686/inv_imu_transport.c
+        Drivers/BSP/ICM45686/inv_imu_driver.c
+        Drivers/BSP/ICM45686/read_aux_data_mode.c
 )
 
 # Add include paths
@@ -71,6 +75,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         Drivers/BSP/SEGGER-RTT
         Drivers/BSP/Inc
         Core/Inc
+        Drivers/BSP/ICM45686
 )
 
 # Add project symbols (macros)

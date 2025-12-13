@@ -1,14 +1,16 @@
 #include <stdio.h>
 #include "inv_imu_driver.h"
+#include "main.h"
 
 #define ICM_USE_HARD_SPI
+#include "SEGGER_RTT.h"
 #include "spi.h"
 
 #define UI_I2C  0 /**< identifies I2C interface. */
-#define UI_SPI4 1 /**< identifies 4-wire SPI interface. */
+#define UI_SPI1 1 /**< identifies 4-wire SPI interface. */
 
 
-#define INV_MSG(level,msg, ...) 	      printf("%d," msg "\r\n", __LINE__, ##__VA_ARGS__)
+#define INV_MSG(level,msg, ...) 	      RTT_Log("%d," msg "\r\n", __LINE__, ##__VA_ARGS__)
 
 /* --- DWT Implementation Start --- */
 /* 确保 SystemCoreClock 可见 (通常在 main.h 或 stm32xxx_hal.h 中定义) */
@@ -69,22 +71,22 @@ int si_print_error_if_any(int rc)
 	if (rc != 0) {
 		switch (rc) {
 		case INV_IMU_ERROR:
-			printf("Unspecified error (%d)", rc);
+			RTT_Log("Unspecified error (%d)", rc);
 			break;
 		case INV_IMU_ERROR_TRANSPORT:
-			printf("Error occurred at transport level (%d)", rc);
+			RTT_Log("Error occurred at transport level (%d)", rc);
 			break;
 		case INV_IMU_ERROR_TIMEOUT:
-			printf("Action did not complete in the expected time window (%d)",rc);
+			RTT_Log("Action did not complete in the expected time window (%d)",rc);
 			break;
 		case INV_IMU_ERROR_BAD_ARG:
-			printf("Invalid argument provided (%d)", rc);
+			RTT_Log("Invalid argument provided (%d)", rc);
 			break;
 		case INV_IMU_ERROR_EDMP_BUF_EMPTY:
-			printf("EDMP buffer is empty (%d)", rc);
+			RTT_Log("EDMP buffer is empty (%d)", rc);
 			break;
 		default:
-			printf("Unknown error (%d)", rc);
+			RTT_Log("Unknown error (%d)", rc);
 			break;
 		}
 	}
@@ -107,17 +109,17 @@ static int icm45686_read_regs(uint8_t reg, uint8_t* buf, uint32_t len)
     uint8_t regval = 0;
 #if defined(ICM_USE_HARD_SPI)
     reg |= 0x80;
-    HAL_GPIO_WritePin(SPI4_CS_GPIO_Port, SPI4_CS_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
     /* 写入要读的寄存器地址 */
-    HAL_SPI_TransmitReceive(&hspi4, &reg, &regval, 1, 1000);
+    HAL_SPI_TransmitReceive(&hspi1, &reg, &regval, 1, 1000);
     /* 读取寄存器数据 */
     while(len)
 	{
-		HAL_SPI_TransmitReceive(&hspi4, &reg, buf, 1, 1000);
+		HAL_SPI_TransmitReceive(&hspi1, &reg, buf, 1, 1000);
 		len--;
 		buf++;
 	}
-    HAL_GPIO_WritePin(SPI4_CS_GPIO_Port, SPI4_CS_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
 #elif defined(ICM_USE_I2C)
 	IIC_Read_nByte(ICM_I2C_ADDR, reg, len, buf);
 #endif
@@ -128,12 +130,12 @@ static uint8_t io_write_reg(uint8_t reg, uint8_t value)
 {
     uint8_t regval = 0;
 #if defined(ICM_USE_HARD_SPI)
-    HAL_GPIO_WritePin(SPI4_CS_GPIO_Port, SPI4_CS_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
     /* 写入要读的寄存器地址 */
-    HAL_SPI_TransmitReceive(&hspi4, &reg, &regval, 1, 1000);
+    HAL_SPI_TransmitReceive(&hspi1, &reg, &regval, 1, 1000);
     /* 读取寄存器数据 */
-    HAL_SPI_TransmitReceive(&hspi4, &value, &regval, 1, 1000);
-    HAL_GPIO_WritePin(SPI4_CS_GPIO_Port, SPI4_CS_Pin, GPIO_PIN_SET);
+    HAL_SPI_TransmitReceive(&hspi1, &value, &regval, 1, 1000);
+    HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
 #elif defined(ICM_USE_I2C)
 	IIC_Write_nByte(ICM_I2C_ADDR, reg, 1, &value);
 #endif
@@ -172,7 +174,7 @@ int setup_imu(int use_ln, int accel_en, int gyro_en)
 
 #if defined(ICM_USE_HARD_SPI)
 	/* Init transport layer */
-	imu_dev.transport.serif_type = UI_SPI4;
+	imu_dev.transport.serif_type = UI_SPI1;
 
 #endif
 #if defined(ICM_USE_I2C)

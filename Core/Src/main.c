@@ -33,6 +33,7 @@
 #include "app_entry.h"
 #include "LineFollower_Interface.h"
 #include "App_PidConfig.h"
+#include "IMU.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -54,6 +55,7 @@ Key_t user_key;
 
 /* USER CODE BEGIN PV */
 float times = 0.01f;
+float User_YPR[3];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -133,6 +135,9 @@ int main(void)
 
   // 3. 启动串口 DMA 接收
   App_Serial_Init();
+
+  // 4. 初始化陀螺仪
+  IMU_init();
 
   HAL_TIM_Base_Start_IT(&htim7);
   App_Start(); // 启动 C++ 应用程序入口
@@ -215,6 +220,7 @@ void SystemClock_Config(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM7) {
+    IMU_getYawPitchRoll(User_YPR);
     LineFollower_OnTimer();
   }
 }
