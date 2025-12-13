@@ -1,16 +1,15 @@
 #include <stdio.h>
 #include "inv_imu_driver.h"
-#include "main.h"
 
 #define ICM_USE_HARD_SPI
 #include "SEGGER_RTT.h"
 #include "spi.h"
 
 #define UI_I2C  0 /**< identifies I2C interface. */
-#define UI_SPI1 1 /**< identifies 4-wire SPI interface. */
+#define UI_SPI3 2 /**< identifies 4-wire SPI interface. */
 
 
-#define INV_MSG(level,msg, ...) 	      RTT_Log("%d," msg "\r\n", __LINE__, ##__VA_ARGS__)
+#define INV_MSG(level,msg, ...) 	      printf("%d," msg "\r\n", __LINE__, ##__VA_ARGS__)
 
 /* --- DWT Implementation Start --- */
 /* 确保 SystemCoreClock 可见 (通常在 main.h 或 stm32xxx_hal.h 中定义) */
@@ -174,7 +173,7 @@ int setup_imu(int use_ln, int accel_en, int gyro_en)
 
 #if defined(ICM_USE_HARD_SPI)
 	/* Init transport layer */
-	imu_dev.transport.serif_type = UI_SPI1;
+	imu_dev.transport.serif_type = UI_SPI4;
 
 #endif
 #if defined(ICM_USE_I2C)
