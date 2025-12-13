@@ -103,13 +103,13 @@ public:
 
         float sum = 0;
         int count = 0;
-        if (raw & GPIO_PIN_15) { sum += -3.0f; count++; }
+        if (raw & GPIO_PIN_15) { sum += -5.0f; count++; }
         // if (raw & GPIO_PIN_14) { sum += -2.0f; count++; }
         // if (raw & GPIO_PIN_13) { sum += -1.0f; count++; }
-        if (raw & GPIO_PIN_12) { sum +=  0.0f; count++; }
-        if (raw & GPIO_PIN_11) { sum +=  1.0f; count++; }
+        if (raw & GPIO_PIN_12) { sum +=  2.0f; count++; }
+        if (raw & GPIO_PIN_11) { sum +=  0.0f; count++; }
         if (raw & GPIO_PIN_10) { sum +=  2.0f; count++; }
-        if (raw & GPIO_PIN_8)  { sum +=  3.0f; count++; }
+        if (raw & GPIO_PIN_8)  { sum +=  5.0f; count++; }
 
         position_error = sum / count;
 
