@@ -19,6 +19,14 @@ public:
     void init() {
         // 启动 DMA
         HAL_UART_Receive_DMA(_huart, _rx_buffer, _buf_size);
+
+        // 同步 tail 到当前 head，丢弃所有已接收的垃圾数据
+        _tail = _buf_size - __HAL_DMA_GET_COUNTER(_huart->hdmarx);
+        _line_idx = 0;
+
+        // 清理UART错误标志（防止噪声触发错误中断）
+        __HAL_UART_CLEAR_FLAG(_huart, UART_CLEAR_PEF | UART_CLEAR_FEF |
+                                        UART_CLEAR_NEF | UART_CLEAR_OREF);
     }
 
     bool process(std::string& output_cmd) {

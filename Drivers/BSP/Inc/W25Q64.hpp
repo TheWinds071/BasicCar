@@ -75,20 +75,29 @@ public:
     // 初始化 (简单的 ID 读取测试)
     bool init() {
         csHigh();
-        HAL_Delay(10);
+        HAL_Delay(20);  // 增加延迟到20ms
 
-        csLow();
-        spiSwap(W25Q_CMD_JEDEC_ID);
-        uint8_t mid = spiSwap(0xFF);
-        uint8_t mtype = spiSwap(0xFF);
-        uint8_t mcap = spiSwap(0xFF);
-        csHigh();
+        // 重试3次
+        for(int retry = 0; retry < 3; retry++) {
+            csLow();
+            spiSwap(W25Q_CMD_JEDEC_ID);
+            uint8_t mid = spiSwap(0xFF);
+            uint8_t mtype = spiSwap(0xFF);
+            uint8_t mcap = spiSwap(0xFF);
+            csHigh();
 
-        // 【新增调试打印】
-        RTT_Log("[W25Q64] Init ID Read: MID=0x%02X, Type=0x%02X, Cap=0x%02X\r\n", mid, mtype, mcap);
+            RTT_Log("[W25Q64] Init Attempt %d: MID=0x%02X, Type=0x%02X, Cap=0x%02X\r\n",
+                    retry+1, mid, mtype, mcap);
 
-        // Winbond ID 是 0xEF
-        return (mid == 0xEF);
+            if (mid == 0xEF) {
+                return true;
+            }
+
+            HAL_Delay(10);
+        }
+
+        RTT_Log("[W25Q64] Init FAILED after 3 retries!\r\n");
+        return false;
     }
 
     // 擦除一个 4KB 扇区
