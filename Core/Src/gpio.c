@@ -55,7 +55,7 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, LED_R_Pin|LED_G_Pin|LED_B_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, Buzzer_Pin|R3_Pin|R2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(Buzzer_GPIO_Port, Buzzer_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
@@ -65,10 +65,6 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(MOS_GPIO_Port, MOS_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, R1_Pin|M_Pin|L1_Pin|L2_Pin
-                          |L3_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : Button2_Pin Button3_Pin Button1_Pin */
   GPIO_InitStruct.Pin = Button2_Pin|Button3_Pin|Button1_Pin;
@@ -82,10 +78,8 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(USER_KEY_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LED_R_Pin LED_G_Pin LED_B_Pin Buzzer_Pin
-                           R3_Pin R2_Pin */
-  GPIO_InitStruct.Pin = LED_R_Pin|LED_G_Pin|LED_B_Pin|Buzzer_Pin
-                          |R3_Pin|R2_Pin;
+  /*Configure GPIO pins : LED_R_Pin LED_G_Pin LED_B_Pin Buzzer_Pin */
+  GPIO_InitStruct.Pin = LED_R_Pin|LED_G_Pin|LED_B_Pin|Buzzer_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -112,13 +106,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(MOS_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : R1_Pin M_Pin L1_Pin L2_Pin
-                           L3_Pin */
-  GPIO_InitStruct.Pin = R1_Pin|M_Pin|L1_Pin|L2_Pin
-                          |L3_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  /*Configure GPIO pins : PA8 PA10 PA11 PA12
+                           PA15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12
+                          |GPIO_PIN_15;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*AnalogSwitch Config */

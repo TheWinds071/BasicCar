@@ -18,7 +18,7 @@ void LineFollower_Init(void) {
 
     // 设置基础速度 (0.0 - 1.0)
     // 例如 0.4 代表 40% 的占空比
-    controller->setBaseSpeed(0.4f);
+    controller->setBaseSpeed(0.1f);
 
     controller->begin();
 }

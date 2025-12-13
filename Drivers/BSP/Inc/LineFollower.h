@@ -8,7 +8,7 @@
 #include "PidStorage.hpp"
 
 // ================== 配置参数 ==================
-#define LF_SENSOR_MASK   0xFD00  // PA15-PA10, PA8
+#define LF_SENSOR_MASK   0x9D00  // PA15,PA12,PA11,PA10,PA8
 //  APB2=240M, 20kHz -> ARR=11999
 #define LF_PWM_PERIOD    11999
 
@@ -68,7 +68,7 @@ public:
 
     }
 
-    // 设置基础速度 (例如 0.4)
+    // 设置基础速度
     void setBaseSpeed(float speed) {
         _base_speed = speed;
     }
@@ -86,13 +86,13 @@ public:
     // === 中断调用核心 ===
     void updateISR() {
         // 1. 读取传感器 (IDR & Mask)
-        // 假设传感器：遇黑线为 0
-        uint16_t raw = (~GPIOA->IDR) & LF_SENSOR_MASK;
+        // 假设传感器：遇黑线为 1
+        uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
 
         // 2. 计算当前位置偏差 (Measured)
         float position_error = 0.0f;
 
-        if (raw == 1) {
+        if (raw == 0) {
             // 脱轨处理：这里简单刹车，也可以写逻辑让它原地转圈找线
             setSingleMotor(_ch_L1, _ch_L2, 0.0f);
             setSingleMotor(_ch_R1, _ch_R2, 0.0f);
@@ -104,8 +104,8 @@ public:
         float sum = 0;
         int count = 0;
         if (raw & GPIO_PIN_15) { sum += -3.0f; count++; }
-        if (raw & GPIO_PIN_14) { sum += -2.0f; count++; }
-        if (raw & GPIO_PIN_13) { sum += -1.0f; count++; }
+        // if (raw & GPIO_PIN_14) { sum += -2.0f; count++; }
+        // if (raw & GPIO_PIN_13) { sum += -1.0f; count++; }
         if (raw & GPIO_PIN_12) { sum +=  0.0f; count++; }
         if (raw & GPIO_PIN_11) { sum +=  1.0f; count++; }
         if (raw & GPIO_PIN_10) { sum +=  2.0f; count++; }
@@ -124,7 +124,7 @@ public:
         float speed_r = _base_speed + turn_adjust;
 
         setSingleMotor(_ch_L1, _ch_L2, speed_l);
-        setSingleMotor(_ch_R1, _ch_R2, speed_r);
+        setSingleMotor(_ch_R2, _ch_R1, speed_r);
     }
 };
 

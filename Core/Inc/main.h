@@ -79,20 +79,6 @@ void Error_Handler(void);
 #define SPI2_CS_GPIO_Port GPIOB
 #define MOS_Pin GPIO_PIN_14
 #define MOS_GPIO_Port GPIOD
-#define R3_Pin GPIO_PIN_8
-#define R3_GPIO_Port GPIOC
-#define R2_Pin GPIO_PIN_9
-#define R2_GPIO_Port GPIOC
-#define R1_Pin GPIO_PIN_8
-#define R1_GPIO_Port GPIOA
-#define M_Pin GPIO_PIN_9
-#define M_GPIO_Port GPIOA
-#define L1_Pin GPIO_PIN_10
-#define L1_GPIO_Port GPIOA
-#define L2_Pin GPIO_PIN_11
-#define L2_GPIO_Port GPIOA
-#define L3_Pin GPIO_PIN_12
-#define L3_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 
