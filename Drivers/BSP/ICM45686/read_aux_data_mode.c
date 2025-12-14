@@ -6,7 +6,7 @@
 #include "spi.h"
 
 #define UI_I2C  0 /**< identifies I2C interface. */
-#define UI_SPI3 2 /**< identifies 4-wire SPI interface. */
+#define UI_SPI4 1 /**< identifies 4-wire SPI interface. */
 
 
 #define INV_MSG(level,msg, ...) 	      printf("%d," msg "\r\n", __LINE__, ##__VA_ARGS__)
@@ -108,17 +108,17 @@ static int icm45686_read_regs(uint8_t reg, uint8_t* buf, uint32_t len)
     uint8_t regval = 0;
 #if defined(ICM_USE_HARD_SPI)
     reg |= 0x80;
-    HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(SPI6_CS_GPIO_Port, SPI6_CS_Pin, GPIO_PIN_RESET);
     /* 写入要读的寄存器地址 */
-    HAL_SPI_TransmitReceive(&hspi1, &reg, &regval, 1, 1000);
+    HAL_SPI_TransmitReceive(&hspi6, &reg, &regval, 1, 1000);
     /* 读取寄存器数据 */
     while(len)
 	{
-		HAL_SPI_TransmitReceive(&hspi1, &reg, buf, 1, 1000);
+		HAL_SPI_TransmitReceive(&hspi6, &reg, buf, 1, 1000);
 		len--;
 		buf++;
 	}
-    HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(SPI6_CS_GPIO_Port, SPI6_CS_Pin, GPIO_PIN_SET);
 #elif defined(ICM_USE_I2C)
 	IIC_Read_nByte(ICM_I2C_ADDR, reg, len, buf);
 #endif
@@ -129,12 +129,12 @@ static uint8_t io_write_reg(uint8_t reg, uint8_t value)
 {
     uint8_t regval = 0;
 #if defined(ICM_USE_HARD_SPI)
-    HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(SPI6_CS_GPIO_Port, SPI6_CS_Pin, GPIO_PIN_RESET);
     /* 写入要读的寄存器地址 */
-    HAL_SPI_TransmitReceive(&hspi1, &reg, &regval, 1, 1000);
+    HAL_SPI_TransmitReceive(&hspi6, &reg, &regval, 1, 1000);
     /* 读取寄存器数据 */
-    HAL_SPI_TransmitReceive(&hspi1, &value, &regval, 1, 1000);
-    HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
+    HAL_SPI_TransmitReceive(&hspi6, &value, &regval, 1, 1000);
+    HAL_GPIO_WritePin(SPI6_CS_GPIO_Port, SPI6_CS_Pin, GPIO_PIN_SET);
 #elif defined(ICM_USE_I2C)
 	IIC_Write_nByte(ICM_I2C_ADDR, reg, 1, &value);
 #endif
@@ -211,9 +211,9 @@ int setup_imu(int use_ln, int accel_en, int gyro_en)
 	}
 
 	if (whoami != INV_IMU_WHOAMI) {
-		INV_MSG(INV_MSG_LEVEL_ERROR, "Erroneous WHOAMI value.");
-		INV_MSG(INV_MSG_LEVEL_ERROR, "  - Read 0x%02x", whoami);
-		INV_MSG(INV_MSG_LEVEL_ERROR, "  - Expected 0x%02x", INV_IMU_WHOAMI);
+		RTT_Log("Erroneous WHOAMI value.");
+		RTT_Log("  - Read 0x%02x", whoami);
+		RTT_Log("  - Expected 0x%02x", INV_IMU_WHOAMI);
 		return -1;
 	}
 

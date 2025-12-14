@@ -25,7 +25,7 @@ void IMU_getValues(float * values);
 void IMU_getYawPitchRoll(float * ypr);
 void IMU_TT_getgyro(float * zsjganda);
 
-/* 核心解算函数 */
+/* 核心解算函数，现在支持传入 dt 以适应不同频率 */
 void IMU_AHRSupdate(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz);
 
 #endif
