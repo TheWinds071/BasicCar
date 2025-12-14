@@ -1,6 +1,0 @@
-/home/runner/work/BasicCar/BasicCar/build/CMakeFiles/BasicCar.dir
-/home/runner/work/BasicCar/BasicCar/build/CMakeFiles/edit_cache.dir
-/home/runner/work/BasicCar/BasicCar/build/CMakeFiles/rebuild_cache.dir
-/home/runner/work/BasicCar/BasicCar/build/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir
-/home/runner/work/BasicCar/BasicCar/build/cmake/stm32cubemx/CMakeFiles/edit_cache.dir
-/home/runner/work/BasicCar/BasicCar/build/cmake/stm32cubemx/CMakeFiles/rebuild_cache.dir
