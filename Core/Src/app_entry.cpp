@@ -4,7 +4,10 @@
 #include "button.hpp"   // 包含上一段我们写的 Button 类
 #include "SEGGER_RTT.h"
 #include "App_PidConfig.h"
-#include "oled.h"       // OLED display support
+#include "LineFollower_Interface.h"
+#include "u8g2.h"
+
+extern u8g2_t u8g2;
 
 // --- C++ 对象实例化 (全局) ---
 // 此时已经在 C++ 环境中了，对象构造函数会被正确调用
@@ -17,23 +20,18 @@ void onOkClick() {
     App_Pid_Save();
 }
 
+void setYawRef() {
+    LineFollower_SetYaw();
+}
+
 // --- 引导函数实现 ---
 // 这个函数接管了 main.c 的控制权
 void App_Start(void) {
 
     // 1. C++ 逻辑初始化
     btn.attachClick(onOkClick);
+    btn.attachLongPress(setYawRef); // 长按重置航向参考
 
-    // Initialize OLED display
-    if (OLED_Init()) {
-        RTT_Log("OLED initialized successfully\r\n");
-        OLED_Clear();
-        OLED_DrawText(0, 10, "BasicCar Ready");
-        OLED_DrawText(0, 25, "STM32H750");
-        OLED_Task();
-    } else {
-        RTT_Log("OLED initialization failed\r\n");
-    }
 
     // 2. C++ 主循环 (替代 main.c 的 while(1))
     uint32_t oled_update_counter = 0;
@@ -44,11 +42,9 @@ void App_Start(void) {
 
         App_Serial_Loop();
 
-        // Periodically update OLED (every ~100 cycles to avoid blocking)
-        oled_update_counter++;
-        if (oled_update_counter >= 100) {
-            oled_update_counter = 0;
-            OLED_Task();
-        }
+        u8g2_ClearBuffer(&u8g2);
+        u8g2_DrawStr(&u8g2,0,12,"Hello World");
+        u8g2_SendBuffer(&u8g2);
+
     }
 }

@@ -34,11 +34,14 @@
 #include "LineFollower_Interface.h"
 #include "App_PidConfig.h"
 #include "IMU.h"
+#include "OLED.h"
+#include "u8g2.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 Key_t user_key;
+u8g2_t u8g2;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -140,6 +143,10 @@ int main(void)
   IMU_init();
 
   HAL_TIM_Base_Start_IT(&htim7);
+
+  u8g2Init(&u8g2);
+  u8g2_SetFont(&u8g2,u8g2_font_6x12_tf);
+
   App_Start(); // 启动 C++ 应用程序入口
   /* USER CODE END 2 */
 

@@ -10,10 +10,12 @@ extern "C" {
     void LineFollower_OnTimer(void);
     void LineFollower_SetSpeed(float speed);
 
+
 #ifdef __cplusplus
 }
 #endif
 
 void LineFollower_SetPID(uint8_t id, float kp, float ki, float kd);
+void LineFollower_SetYaw();
 
 #endif // LINE_FOLLOWER_INTERFACE_H

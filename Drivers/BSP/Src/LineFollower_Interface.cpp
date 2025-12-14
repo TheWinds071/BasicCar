@@ -43,3 +43,10 @@ void LineFollower_SetSpeed(float speed) {
         controller->setBaseSpeed(speed);
     }
 }
+
+// 重置航向参考接口
+void LineFollower_SetYaw() {
+    if (controller != nullptr) {
+        controller->resetYawRef();
+    }
+}

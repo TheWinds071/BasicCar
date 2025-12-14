@@ -31,6 +31,8 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 # Enable CMake support for ASM and C languages
 enable_language(C ASM)
 
+file(GLOB U8G2_SOURCES "Drivers/BSP/U8G2/*.c")
+
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME}
         Drivers/BSP/Inc/key_driver.h
@@ -67,35 +69,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         Drivers/BSP/ICM45686/inv_imu_transport.c
         Drivers/BSP/ICM45686/inv_imu_driver.c
         Drivers/BSP/ICM45686/read_aux_data_mode.c
-        # OLED display support
-        Drivers/BSP/OLED/Src/oled.c
-        Drivers/BSP/OLED/Src/u8g2_hal_i2c.c
-        # u8g2 library sources
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_setup.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_d_memory.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_d_setup.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_buffer.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_hvline.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_ll_hvline.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_box.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_font.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_fonts.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_cleardisplay.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_line.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_bitmap.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_circle.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_polygon.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_intersection.c
-        Drivers/BSP/OLED/u8g2/csrc/u8g2_kerning.c
-        # u8x8 library sources
-        Drivers/BSP/OLED/u8g2/csrc/u8x8_setup.c
-        Drivers/BSP/OLED/u8g2/csrc/u8x8_display.c
-        Drivers/BSP/OLED/u8g2/csrc/u8x8_byte.c
-        Drivers/BSP/OLED/u8g2/csrc/u8x8_cad.c
-        Drivers/BSP/OLED/u8g2/csrc/u8x8_gpio.c
-        Drivers/BSP/OLED/u8g2/csrc/u8x8_d_ssd1306_128x64_noname.c
-        Drivers/BSP/OLED/u8g2/csrc/u8x8_debounce.c
-        Drivers/BSP/OLED/u8g2/csrc/u8x8_input_value.c
+        ${U8G2_SOURCES}
 )
 
 # Add include paths
@@ -105,8 +79,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         Drivers/BSP/Inc
         Core/Inc
         Drivers/BSP/ICM45686
-        Drivers/BSP/OLED/Inc
-        Drivers/BSP/OLED/u8g2/csrc
+        Drivers/BSP/U8G2
 )
 
 # Add project symbols (macros)
