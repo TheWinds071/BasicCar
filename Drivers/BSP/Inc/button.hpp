@@ -65,7 +65,7 @@ private:
     ButtonCallback _onLongPress = nullptr;
 
     // 配置参数 (ms)
-    static constexpr uint32_t DEBOUNCE_TIME = 20;
+    static constexpr uint32_t DEBOUNCE_TIME = 1;
     static constexpr uint32_t LONG_PRESS_TIME = 1000;
 
     // 内部辅助函数

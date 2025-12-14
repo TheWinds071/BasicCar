@@ -35,7 +35,6 @@ file(GLOB U8G2_SOURCES "Drivers/BSP/U8G2/*.c")
 
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME}
-        Drivers/BSP/Inc/key_driver.h
         Core/Inc/app_entry.h
         Drivers/BSP/Inc/button.hpp
         Drivers/BSP/Inc/LineFollower.h
@@ -47,6 +46,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Drivers/BSP/Inc/App_PidConfig.h
         Drivers/BSP/Src/App_PidConfig.cpp
         Drivers/BSP/Inc/UartRingBuffer.hpp
+        Drivers/BSP/Inc/ui.h
+        Drivers/BSP/Src/ui.cpp
 )
 
 # Add STM32CubeMX generated sources
@@ -63,7 +64,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         Drivers/BSP/SEGGER-RTT/SEGGER_RTT.c
         Drivers/BSP/SEGGER-RTT/SEGGER_RTT_printf.c
         Core/Src/app_entry.cpp
-        Drivers/BSP/Src/key_driver.c
         Drivers/BSP/Src/button.cpp
         Drivers/BSP/ICM45686/IMU.c
         Drivers/BSP/ICM45686/inv_imu_transport.c

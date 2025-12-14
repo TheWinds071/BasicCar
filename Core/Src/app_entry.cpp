@@ -6,6 +6,7 @@
 #include "App_PidConfig.h"
 #include "LineFollower_Interface.h"
 #include "u8g2.h"
+#include "ui.h"
 
 extern u8g2_t u8g2;
 
@@ -31,7 +32,8 @@ void App_Start(void) {
     // 1. C++ 逻辑初始化
     btn.attachClick(onOkClick);
     btn.attachLongPress(setYawRef); // 长按重置航向参考
-
+    // 初始化三键 UI
+    UI_Init();
 
     // 2. C++ 主循环 (替代 main.c 的 while(1))
     uint32_t oled_update_counter = 0;
@@ -39,12 +41,13 @@ void App_Start(void) {
 
         // 扫描按键
         btn.scan();
+        // 扫描三键（PE6/PE4/PE5）并更新 UI 状态
+        UI_Button_Update();
 
         App_Serial_Loop();
 
-        u8g2_ClearBuffer(&u8g2);
-        u8g2_DrawStr(&u8g2,0,12,"Hello World");
-        u8g2_SendBuffer(&u8g2);
+        // 绘制 UI
+        UI_Render();
 
     }
 }

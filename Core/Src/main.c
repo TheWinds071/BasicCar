@@ -29,7 +29,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "SEGGER_RTT.h"
-#include "key_driver.h"
 #include "app_entry.h"
 #include "LineFollower_Interface.h"
 #include "App_PidConfig.h"
@@ -40,7 +39,6 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-Key_t user_key;
 u8g2_t u8g2;
 /* USER CODE END PTD */
 
