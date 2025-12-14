@@ -87,6 +87,14 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         Drivers/BSP/OLED/u8g2/u8g2_polygon.c
         Drivers/BSP/OLED/u8g2/u8g2_intersection.c
         Drivers/BSP/OLED/u8g2/u8g2_kerning.c
+        # u8x8 library sources (required by u8g2)
+        Drivers/BSP/OLED/u8g2/u8x8_setup.c
+        Drivers/BSP/OLED/u8g2/u8x8_d_ssd1306_128x64_noname.c
+        Drivers/BSP/OLED/u8g2/u8x8_cad.c
+        Drivers/BSP/OLED/u8g2/u8x8_byte.c
+        Drivers/BSP/OLED/u8g2/u8x8_gpio.c
+        Drivers/BSP/OLED/u8g2/u8x8_display.c
+        Drivers/BSP/OLED/u8g2/u8x8_string.c
 )
 
 # Add include paths

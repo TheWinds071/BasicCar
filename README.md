@@ -30,6 +30,7 @@ BasicCar 是一个基于 STM32H750VBT6 微控制器的智能寻线小车控制�
 | 灰度传感器 | GPIO | 7路寻线传感器 | PA15-PA10, PA8 |
 | 电机驱动 | TIM1 PWM | 双电机控制 | - |
 | Flash 存储 | SPI2 | W25Q64 参数存储 | SPI2_CS |
+| OLED 显示屏 | I2C4 | SSD1306 128x64 显示 | I2C4 (地址 0x3C) |
 | 串口通信 | USART3 | 参数配置 | - |
 | 调试输出 | RTT | SEGGER RTT | - |
 | 用户按键 | GPIO | 按键交互 | USER_KEY |
@@ -436,10 +437,16 @@ break main
    - Flash 存储 PID 参数
    - 掉电不丢失配置
 
+## 扩展功能
+
+- [x] **OLED 显示屏支持** - SSD1306 128x64 OLED 显示 (I2C4, 地址 0x3C)
+  - 使用 u8g2 库全缓冲模式
+  - 详见 `Drivers/BSP/OLED/README.md`
+
 ## 扩展功能建议
 
 - [ ] 添加蓝牙/WiFi 模块实现无线调参
-- [ ] 增加 OLED 显示屏显示实时参数
+- [ ] OLED 显示实时 PID 参数和传感器状态
 - [ ] 实现多种运动模式 (慢速/快速/精确)
 - [ ] 添加障碍物检测功能
 - [ ] 实现 PID 自整定算法
