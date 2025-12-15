@@ -86,7 +86,7 @@ private:
             _yaw_ref_inited = true;
         }
 
-        float yaw_err = wrapAngleDeg(_yaw_ref_deg - yaw_now);
+        float yaw_err = wrapAngleDeg(yaw_now - _yaw_ref_deg);
         float yaw_adjust = _pidForward.compute(0.0f, yaw_err);
 
         setEndSpeed(0.0f, yaw_adjust);
