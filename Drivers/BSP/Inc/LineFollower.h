@@ -2,7 +2,7 @@
 #define LINE_FOLLOWER_H
 
 #include "main.h"
-#include "Pid.hpp" // 包含刚才定义的模板
+#include "Pid.hpp"
 #include <cmath>
 
 #include "PidStorage.hpp"
@@ -10,39 +10,31 @@
 
 // ================== 配置参数 ==================
 #define LF_SENSOR_MASK   0x9D00  // PA15,PA12,PA11,PA10,PA8
-//  APB2=240M, 20kHz -> ARR=11999
 #define LF_PWM_PERIOD    11999
 
-// === 新增：引用 main.c 中的 IMU 姿态角数组 ===
-// 你在 main.c 里用的是 User_YPR（注意大小写），这里用 extern 引用即可。
-// User_YPR[0] = yaw, [1] = pitch, [2] = roll（按常见 IMU 输出约定）
 extern float User_YPR[3];
 
 class LineFollower {
 private:
     TIM_HandleTypeDef* _htim;
-    uint32_t _ch_L1, _ch_L2; // 左电机通道
-    uint32_t _ch_R1, _ch_R2; // 右电机通道
+    uint32_t _ch_L1, _ch_L2;
+    uint32_t _ch_R1, _ch_R2;
     uint32_t _pwm_arr;
 
-    // === 核心变化：引入 PID 对象 ===
     PidController<float> _pidTurn;
     PidController<float> _pidForward;
 
-    float _base_speed; // 基础速度 (0.0 - 1.0)
+    float _base_speed;
 
-    // === 新增：直线航向保持相关 ===
     bool  _yaw_ref_inited = false;
-    float _yaw_ref_deg    = 0.0f; // 直线目标航向（单位：度；与你 IMU 输出一致）
+    float _yaw_ref_deg    = 0.0f;
 
-    // 将角度误差归一化到 [-180, 180]，避免 yaw 跳变导致 PID 爆炸
     static float wrapAngleDeg(float err_deg) {
         while (err_deg > 180.0f) err_deg -= 360.0f;
         while (err_deg < -180.0f) err_deg += 360.0f;
         return err_deg;
     }
 
-    // 内部函数：设置单边电机 (DRV8870 慢衰减)
     void setSingleMotor(uint32_t ch1, uint32_t ch2, float speed) {
         if (speed > 1.0f) speed = 1.0f;
         if (speed < -1.0f) speed = -1.0f;
@@ -60,65 +52,9 @@ private:
         }
     }
 
-public:
-
-    /**
-     * @brief 构造函数
-     * @param kp, ki, kd PID 参数
-     */
-    LineFollower(TIM_HandleTypeDef* htim, uint32_t l1, uint32_t l2, uint32_t r1, uint32_t r2)
-        : _htim(htim), _ch_L1(l1), _ch_L2(l2), _ch_R1(r1), _ch_R2(r2),
-          _pidTurn(0.1f, 0.0f, 0.2f, -1.0f, 1.0f),      // 初始化转向 PID
-          _pidForward(1.0f, 0.0f, 0.0f, -1.0f, 1.0f),    // 初始化直行 PID (输出限幅 -1.0~1.0)
-          _base_speed(0.0f)
-    {
-        _pwm_arr = 0;
-    }
-
-    void begin() {
-        _pwm_arr = __HAL_TIM_GET_AUTORELOAD(_htim);
-
-        HAL_TIM_PWM_Start(_htim, _ch_L1);
-        HAL_TIM_PWM_Start(_htim, _ch_L2);
-        HAL_TIM_PWM_Start(_htim, _ch_R1);
-        HAL_TIM_PWM_Start(_htim, _ch_R2);
-
-    }
-
-    // 设置基础速度
-    void setBaseSpeed(float speed) {
-        _base_speed = speed;
-    }
-
-    // 外部强制重新锁定直线航向
-    void resetYawRef() {
-        _yaw_ref_inited = false;
-        _pidForward.reset();
-    }
-
-    // 外部设置直线航向参考
-    void setYawRefDeg(float yaw_deg) {
-        _yaw_ref_deg = yaw_deg;
-        _yaw_ref_inited = true;
-        _pidForward.reset(); // 切换参考时清一下积分更稳
-    }
-
-    // === 修改：支持指定 ID 调参 ===
-    void tunePid(uint8_t id, float kp, float ki, float kd) {
-        if (id == PID_ID_TURN) {
-            _pidTurn.setTunings(kp, ki, kd);
-        }
-        else if (id == PID_ID_FORWARD) {
-            _pidForward.setTunings(kp, ki, kd);
-        }
-    }
-
-    void setEndSpeed(float turn_adjust,float yaw_adjust) {
-        // === 直行运动计算 ===
-        // 总差速修正 = 寻线转向修正 + 航向修正
-        // float diff = turn_adjust + yaw_adjust;
-        float diff = turn_adjust-yaw_adjust;
-
+    // ====== 公共运动合成 ======
+    void setEndSpeed(float turn_adjust, float yaw_adjust) {
+        float diff = turn_adjust - yaw_adjust;
         float speed_l = _base_speed - diff;
         float speed_r = _base_speed + diff;
 
@@ -126,117 +62,245 @@ public:
         setSingleMotor(_ch_R2, _ch_R1, speed_r);
     }
 
-    // === 中断调用核心 ===
-    void updateISR(uint8_t conformedQuestion) {
-        // 1. 读取传感器 (IDR & Mask)
-        // 假设传感器：遇黑线为 1
-        uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
-
-        // 2. 计算当前位置偏差 (Measured)
-        float position_error = 0.0f;
-
-        // if (raw == 0) {
-        //     // 脱轨处理：这里简单刹车，也可以写逻辑让它原地转圈找线
-        //     setSingleMotor(_ch_L1, _ch_L2, 0.0f);
-        //     setSingleMotor(_ch_R1, _ch_R2, 0.0f);
-        //     // 可选：重置 PID 积分项，防止回到线上时突然猛冲
-        //     _pidTurn.reset();
-        //     return;
-        // }
-
-        float sum = 0;
+    // ====== 传感器位置误差（带 count==0 保护）======
+    bool calcPositionError(uint16_t raw, float& position_error_out) {
+        float sum = 0.0f;
         int count = 0;
+
         if (raw & GPIO_PIN_15) { sum += -5.0f; count++; }
-        // if (raw & GPIO_PIN_14) { sum += -2.0f; count++; }
-        // if (raw & GPIO_PIN_13) { sum += -1.0f; count++; }
         if (raw & GPIO_PIN_12) { sum +=  2.0f; count++; }
         if (raw & GPIO_PIN_11) { sum +=  0.0f; count++; }
         if (raw & GPIO_PIN_10) { sum +=  2.0f; count++; }
         if (raw & GPIO_PIN_8)  { sum +=  5.0f; count++; }
 
-        position_error = sum / count;
+        if (count == 0) return false;
+        position_error_out = sum / (float)count;
+        return true;
+    }
 
-        // 3. 使用 PID 模板计算转向值
-        // 目标是 0.0 (中心)，当前是 position_error
-        float turn_adjust = _pidTurn.compute(0.0f, position_error);
-
-        // 4. === 新增：FPID（走直线/航向保持） ===
-        // 4.1 锁定“直线目标航向”
-        float yaw_now = User_YPR[0]; // yaw（单位按你的 IMU 输出）
+    // ====== 直线段：航向保持（raw==0）======
+    void driveStraightYawHold() {
+        float yaw_now = User_YPR[0];
         if (!_yaw_ref_inited) {
             _yaw_ref_deg = yaw_now;
             _yaw_ref_inited = true;
         }
 
-        // 4.2 计算航向误差并归一化
         float yaw_err = wrapAngleDeg(_yaw_ref_deg - yaw_now);
+        float yaw_adjust = _pidForward.compute(0.0f, yaw_err);
 
-        // 4.3 FPID 输出（把误差当 measured，目标设为 0）
-        // yaw_adjust > 0 表示需要往一个方向修正（具体左右取决于你的电机正反定义）
-        float yaw_adjust = _pidForward.compute(g_raw_mark, yaw_err);
+        setEndSpeed(0.0f, yaw_adjust);
+    }
 
-        switch (conformedQuestion) {
-            case 1: //第一题
-                if (raw == 0) {
-                    // A出发
-                    setBaseSpeed(0.1f);
-                    setEndSpeed(0,yaw_adjust);
-                } else {
-                    // 到B点，简单刹车
-                    setSingleMotor(_ch_L1, _ch_L2, 0.0f);
-                    setSingleMotor(_ch_R1, _ch_R2, 0.0f);
-                    _pidTurn.reset();
-                    Prompt::once(120);
-                }
-                break;
-            case 2: //第二题
-                uint8_t entryTimes = 0;
-                uint8_t exitTimes = 0;
-                if (raw == 0 && exitTimes == 0) {
-                    // A出发
-                    exitTimes ++;
-                    setBaseSpeed(0.1f);
-                    setEndSpeed(0,yaw_adjust);
-                } else if (entryTimes == 0) {
-                    // 到B点，循线
-                    _pidTurn.reset();
-                    entryTimes ++;
-                    Prompt::once(120);
-                    setEndSpeed(turn_adjust,0);
-                } else if (exitTimes == 1) {
-
-
-                }
-                break;
-            case 3:
-
-                break;
-            case 4:
-
-                break;
-            default:
-                break;
+    // ====== 半圆段：循线（raw!=0）======
+    void driveArcLineFollow(uint16_t raw) {
+        float position_error = 0.0f;
+        if (!calcPositionError(raw, position_error)) {
+            // 保险：算不出误差就停
+            setSingleMotor(_ch_L1, _ch_L2, 0.0f);
+            setSingleMotor(_ch_R1, _ch_R2, 0.0f);
+            return;
         }
 
+        float turn_adjust = _pidTurn.compute(0.0f, position_error);
+        setEndSpeed(turn_adjust, 0.0f);
+    }
 
+    // ================== Q1 状态机 ==================
+    enum class Q1State : uint8_t { Idle=0, GoStraight_AB, StopAtB };
+    Q1State _q1_state = Q1State::Idle;
+    bool _q1_prev_hasLine = false;
+    bool _q1_prompted = false;
+
+    void q1_enter(Q1State s) {
+        _q1_state = s;
+        _q1_prompted = false;
+    }
+
+    // ================== Q2 状态机：A->B->C->D->A ==================
+    enum class Q2State : uint8_t { Idle=0, Straight_AB, Arc_BC, Straight_CD, Arc_DA, Done };
+    Q2State _q2_state = Q2State::Idle;
+    bool _q2_prev_hasLine = false;
+    bool _q2_prompted = false;
+
+    void q2_enter(Q2State s) {
+        _q2_state = s;
+        _q2_prompted = false;
+    }
+
+public:
+    LineFollower(TIM_HandleTypeDef* htim, uint32_t l1, uint32_t l2, uint32_t r1, uint32_t r2)
+        : _htim(htim), _ch_L1(l1), _ch_L2(l2), _ch_R1(r1), _ch_R2(r2),
+          _pidTurn(0.1f, 0.0f, 0.2f, -1.0f, 1.0f),
+          _pidForward(1.0f, 0.0f, 0.0f, -1.0f, 1.0f),
+          _base_speed(0.0f)
+    {
+        _pwm_arr = 0;
+    }
+
+    void begin() {
+        _pwm_arr = __HAL_TIM_GET_AUTORELOAD(_htim);
+        HAL_TIM_PWM_Start(_htim, _ch_L1);
+        HAL_TIM_PWM_Start(_htim, _ch_L2);
+        HAL_TIM_PWM_Start(_htim, _ch_R1);
+        HAL_TIM_PWM_Start(_htim, _ch_R2);
+    }
+
+    void setBaseSpeed(float speed) { _base_speed = speed; }
+
+    void resetYawRef() {
+        _yaw_ref_inited = false;
+        _pidForward.reset();
+    }
+
+    void setYawRefDeg(float yaw_deg) {
+        _yaw_ref_deg = yaw_deg;
+        _yaw_ref_inited = true;
+        _pidForward.reset();
+    }
+
+    void tunePid(uint8_t id, float kp, float ki, float kd) {
+        if (id == PID_ID_TURN) _pidTurn.setTunings(kp, ki, kd);
+        else if (id == PID_ID_FORWARD) _pidForward.setTunings(kp, ki, kd);
+    }
+
+    // 题号变化时复位（推荐你在 OnTimer 用 lastQ 调用；即使不调用也能跑，但更稳）
+    void onQuestionChanged(uint8_t q) {
+        if (q != 1) { _q1_state = Q1State::Idle; _q1_prompted = false; }
+        if (q != 2) { _q2_state = Q2State::Idle; _q2_prompted = false; }
+    }
+
+    // Q2 显式启动：进第二题时在 A 点提示一次
+    void q2_start_from_A() {
+        // 你保证起跑 raw==0，所以 prev_hasLine=false 合理
+        _q2_prev_hasLine = false;
+        resetYawRef();
+        q2_enter(Q2State::Straight_AB);
+        // A 点提示一次
+        Prompt::once(120);
+        _q2_prompted = true;
+    }
+
+    // ===== ISR 主逻辑 =====
+    void updateISR(uint8_t conformedQuestion) {
+        uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
+        bool hasLine = (raw != 0);
+
+        switch (conformedQuestion) {
+            case 1: { // Q1: A->B，到B停下并提示一次（状态机）
+                bool rising = (!_q1_prev_hasLine) && hasLine; // 无线->有线 到B
+
+                switch (_q1_state) {
+                    case Q1State::Idle:
+                        setBaseSpeed(0.10f);
+                        resetYawRef();
+                        q1_enter(Q1State::GoStraight_AB);
+                        break;
+
+                    case Q1State::GoStraight_AB:
+                        setBaseSpeed(0.10f);
+                        // 直线段：航向保持
+                        driveStraightYawHold();
+                        if (rising) {
+                            q1_enter(Q1State::StopAtB);
+                        }
+                        break;
+
+                    case Q1State::StopAtB:
+                        setSingleMotor(_ch_L1, _ch_L2, 0.0f);
+                        setSingleMotor(_ch_R1, _ch_R2, 0.0f);
+
+                        if (!_q1_prompted) {
+                            Prompt::once(120);
+                            _q1_prompted = true;
+                        }
+                        break;
+                }
+
+                _q1_prev_hasLine = hasLine;
+                break;
+            }
+
+            case 2: { // Q2: A->B->C->D->A，每过点提示一次（状态机）
+                // 边沿
+                bool rising  = (!_q2_prev_hasLine) && hasLine;      // 无线->有线：B 或 D
+                bool falling = (_q2_prev_hasLine) && (!hasLine);    // 有线->无线：C 或 A
+
+                switch (_q2_state) {
+                    case Q2State::Idle:
+                        // 兜底启动（如果你在外层已经调用 q2_start_from_A()，这里不会走）
+                        q2_start_from_A();
+                        break;
+
+                    case Q2State::Straight_AB:
+                        setBaseSpeed(0.10f);
+                        driveStraightYawHold();
+
+                        if (rising) { // 到 B
+                            Prompt::once(120);
+                            _pidTurn.reset();
+                            q2_enter(Q2State::Arc_BC);
+                        }
+                        break;
+
+                    case Q2State::Arc_BC:
+                        setBaseSpeed(0.10f);
+                        driveArcLineFollow(raw);
+
+                        if (falling) { // 到 C
+                            Prompt::once(120);
+                            resetYawRef(); // 进入直线前重新锁航向
+                            q2_enter(Q2State::Straight_CD);
+                        }
+                        break;
+
+                    case Q2State::Straight_CD:
+                        setBaseSpeed(0.10f);
+                        driveStraightYawHold();
+
+                        if (rising) { // 到 D
+                            Prompt::once(120);
+                            _pidTurn.reset();
+                            q2_enter(Q2State::Arc_DA);
+                        }
+                        break;
+
+                    case Q2State::Arc_DA:
+                        setBaseSpeed(0.10f);
+                        driveArcLineFollow(raw);
+
+                        if (falling) { // 回到 A
+                            Prompt::once(120);
+                            q2_enter(Q2State::Done);
+                        }
+                        break;
+
+                    case Q2State::Done:
+                        setSingleMotor(_ch_L1, _ch_L2, 0.0f);
+                        setSingleMotor(_ch_R1, _ch_R2, 0.0f);
+                        break;
+                }
+
+                _q2_prev_hasLine = hasLine;
+                break;
+            }
+
+            default:
+                // 非1/2：不开车（或你想保留原case3/4逻辑可在这里继续写）
+                _q1_prev_hasLine = hasLine;
+                _q2_prev_hasLine = hasLine;
+                break;
+        }
     }
 };
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-    // 初始化寻线功能 (配置电机、PID参数)
-    void LineFollower_Init(void);
-
-    // 核心控制循环 (必须在 1ms 定时器中断中调用)
-    void LineFollower_OnTimer(void);
-
-    // 可选：设置基础速度 (0.0 ~ 1.0)
-    void LineFollower_SetSpeed(float speed);
-
-    void LineFollower_SetPID(float kp, float ki, float kd);
-
+void LineFollower_Init(void);
+void LineFollower_OnTimer(void);
+void LineFollower_SetSpeed(float speed);
+void LineFollower_SetPID(float kp, float ki, float kd);
 #ifdef __cplusplus
 }
 #endif

@@ -27,8 +27,16 @@ void LineFollower_Init(void) {
 // C 接口：中断调用
 void LineFollower_OnTimer(void) {
     if (controller != nullptr) {
-        uint8_t conformedQustion = UI_GetConfirmedQuestion();
-        controller->updateISR(conformedQustion);
+        static uint8_t lastQ = 0;
+        uint8_t q = UI_GetConfirmedQuestion();
+
+        if (q != lastQ) {
+            controller->onQuestionChanged(q);
+            if (q == 2) controller->q2_start_from_A(); // A点提示一次 + 锁航向
+            lastQ = q;
+        }
+
+        controller->updateISR(q);
     }
 }
 
