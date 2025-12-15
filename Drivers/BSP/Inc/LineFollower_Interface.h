@@ -17,5 +17,6 @@ extern "C" {
 
 void LineFollower_SetPID(uint8_t id, float kp, float ki, float kd);
 void LineFollower_SetYaw();
+void LineFollower_SetYawRef(float yaw_deg);
 
 #endif // LINE_FOLLOWER_INTERFACE_H

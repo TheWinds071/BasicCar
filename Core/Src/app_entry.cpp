@@ -5,10 +5,14 @@
 #include "SEGGER_RTT.h"
 #include "App_PidConfig.h"
 #include "LineFollower_Interface.h"
+#include "Prompt.hpp"
 #include "u8g2.h"
 #include "ui.h"
 
 extern u8g2_t u8g2;
+extern float User_YPR[];
+
+static float g_yaw_mark = 0.0f;
 
 // --- C++ 对象实例化 (全局) ---
 // 此时已经在 C++ 环境中了，对象构造函数会被正确调用
@@ -22,6 +26,9 @@ void onOkClick() {
 }
 
 void setYawRef() {
+    // 1) 记录长按时刻的 yaw
+    g_yaw_mark = User_YPR[0];
+    LineFollower_SetYawRef(g_yaw_mark);
     LineFollower_SetYaw();
 }
 
@@ -34,7 +41,9 @@ void App_Start(void) {
     btn.attachLongPress(setYawRef); // 长按重置航向参考
     // 初始化三键 UI
     UI_Init();
-
+    //初始化声光提示
+    Prompt::init();
+    Prompt::once(120); // 开机提示一下（非阻塞）
     // 2. C++ 主循环 (替代 main.c 的 while(1))
     uint32_t oled_update_counter = 0;
     while (1) {
@@ -48,6 +57,8 @@ void App_Start(void) {
 
         // 绘制 UI
         UI_Render();
+
+        Prompt::tick(HAL_GetTick());
 
     }
 }

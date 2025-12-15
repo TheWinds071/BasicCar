@@ -1,5 +1,6 @@
 #include "LineFollower.h"
 #include "tim.h"
+#include "ui.h"
 
 // === 对象实例化 ===
 // 假设：
@@ -18,7 +19,7 @@ void LineFollower_Init(void) {
 
     // 设置基础速度 (0.0 - 1.0)
     // 例如 0.4 代表 40% 的占空比
-    controller->setBaseSpeed(0.1f);
+    // controller->setBaseSpeed(0.1f);
 
     controller->begin();
 }
@@ -26,7 +27,8 @@ void LineFollower_Init(void) {
 // C 接口：中断调用
 void LineFollower_OnTimer(void) {
     if (controller != nullptr) {
-        controller->updateISR();
+        uint8_t conformedQustion = UI_GetConfirmedQuestion();
+        controller->updateISR(conformedQustion);
     }
 }
 
@@ -48,5 +50,12 @@ void LineFollower_SetSpeed(float speed) {
 void LineFollower_SetYaw() {
     if (controller != nullptr) {
         controller->resetYawRef();
+    }
+}
+
+// 设置航向参考接口
+void LineFollower_SetYawRef(float yaw_deg) {
+    if (controller != nullptr) {
+        controller->setYawRefDeg(yaw_deg);
     }
 }

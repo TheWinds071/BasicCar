@@ -21,10 +21,10 @@ static Button btnDown(Button1_GPIO_Port, Button1_Pin, true);
 static Button btnOk(Button3_GPIO_Port, Button3_Pin, true);
 
 static void onUpClick() {
-    g_selected_q = (g_selected_q <= 1) ? 4 : (uint8_t)(g_selected_q - 1);
+    g_selected_q = (g_selected_q <= 1) ? 4 : static_cast<uint8_t>(g_selected_q - 1);
 }
 static void onDownClick() {
-    g_selected_q = (g_selected_q >= 4) ? 1 : (uint8_t)(g_selected_q + 1);
+    g_selected_q = (g_selected_q >= 4) ? 1 : static_cast<uint8_t>(g_selected_q + 1);
 }
 static void onOkClick() {
     g_confirmed_q = g_selected_q;
@@ -75,7 +75,7 @@ static void draw_question_selector(void) {
     const uint8_t gap = 2;
 
     for (uint8_t i = 1; i <= 4; i++) {
-        uint8_t x = (uint8_t)((i - 1) * (w + gap));
+        auto x = static_cast<uint8_t>((i - 1) * (w + gap));
         if (x + w > 128) break;
 
         if (g_confirmed_q == i) {
@@ -101,9 +101,9 @@ static void draw_question_selector(void) {
 
 static void draw_ypr_table(float yaw, float pitch, float roll) {
     // 行 baseline：40/52/64（最后一行贴边，用 6x12 字体一般还行）
-    const uint8_t y1 = 40;
-    const uint8_t y2 = 52;
-    const uint8_t y3 = 64;
+    constexpr uint8_t y1 = 40;
+    constexpr uint8_t y2 = 52;
+    constexpr uint8_t y3 = 64;
 
     // 左侧标签
     u8g2_DrawStr(&u8g2, 0,  y1, "Yaw:");

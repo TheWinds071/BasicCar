@@ -48,6 +48,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Drivers/BSP/Inc/UartRingBuffer.hpp
         Drivers/BSP/Inc/ui.h
         Drivers/BSP/Src/ui.cpp
+        Drivers/BSP/Src/Prompt.cpp
+        Drivers/BSP/Inc/Prompt.hpp
 )
 
 # Add STM32CubeMX generated sources

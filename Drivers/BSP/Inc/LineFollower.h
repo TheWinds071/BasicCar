@@ -6,6 +6,7 @@
 #include <cmath>
 
 #include "PidStorage.hpp"
+#include "Prompt.hpp"
 
 // ================== 配置参数 ==================
 #define LF_SENSOR_MASK   0x9D00  // PA15,PA12,PA11,PA10,PA8
@@ -95,6 +96,13 @@ public:
         _pidForward.reset();
     }
 
+    // 外部设置直线航向参考
+    void setYawRefDeg(float yaw_deg) {
+        _yaw_ref_deg = yaw_deg;
+        _yaw_ref_inited = true;
+        _pidForward.reset(); // 切换参考时清一下积分更稳
+    }
+
     // === 修改：支持指定 ID 调参 ===
     void tunePid(uint8_t id, float kp, float ki, float kd) {
         if (id == PID_ID_TURN) {
@@ -105,8 +113,21 @@ public:
         }
     }
 
+    void setEndSpeed(float turn_adjust,float yaw_adjust) {
+        // === 直行运动计算 ===
+        // 总差速修正 = 寻线转向修正 + 航向修正
+        // float diff = turn_adjust + yaw_adjust;
+        float diff = turn_adjust-yaw_adjust;
+
+        float speed_l = _base_speed - diff;
+        float speed_r = _base_speed + diff;
+
+        setSingleMotor(_ch_L1, _ch_L2, speed_l);
+        setSingleMotor(_ch_R2, _ch_R1, speed_r);
+    }
+
     // === 中断调用核心 ===
-    void updateISR() {
+    void updateISR(uint8_t conformedQuestion) {
         // 1. 读取传感器 (IDR & Mask)
         // 假设传感器：遇黑线为 1
         uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
@@ -152,20 +173,52 @@ public:
 
         // 4.3 FPID 输出（把误差当 measured，目标设为 0）
         // yaw_adjust > 0 表示需要往一个方向修正（具体左右取决于你的电机正反定义）
-        float yaw_adjust = _pidForward.compute(0.0f, yaw_err);
+        float yaw_adjust = _pidForward.compute(g_raw_mark, yaw_err);
 
-        // 5. === 混合运动计算 ===
-        // 总差速修正 = 寻线转向修正 + 航向修正
-        // float diff = turn_adjust + yaw_adjust;
-        float diff = -yaw_adjust;
+        switch (conformedQuestion) {
+            case 1: //第一题
+                if (raw == 0) {
+                    // A出发
+                    setBaseSpeed(0.1f);
+                    setEndSpeed(0,yaw_adjust);
+                } else {
+                    // 到B点，简单刹车
+                    setSingleMotor(_ch_L1, _ch_L2, 0.0f);
+                    setSingleMotor(_ch_R1, _ch_R2, 0.0f);
+                    _pidTurn.reset();
+                    Prompt::once(120);
+                }
+                break;
+            case 2: //第二题
+                uint8_t entryTimes = 0;
+                uint8_t exitTimes = 0;
+                if (raw == 0 && exitTimes == 0) {
+                    // A出发
+                    exitTimes ++;
+                    setBaseSpeed(0.1f);
+                    setEndSpeed(0,yaw_adjust);
+                } else if (entryTimes == 0) {
+                    // 到B点，循线
+                    _pidTurn.reset();
+                    entryTimes ++;
+                    Prompt::once(120);
+                    setEndSpeed(turn_adjust,0);
+                } else if (exitTimes == 1) {
 
-        RTT_Log("YawErr: %.2f, YawAdj: %.2f, Diff: %.2f\r\n", yaw_err, yaw_adjust, diff);
 
-        float speed_l = _base_speed - diff;
-        float speed_r = _base_speed + diff;
+                }
+                break;
+            case 3:
 
-        setSingleMotor(_ch_L1, _ch_L2, speed_l);
-        setSingleMotor(_ch_R2, _ch_R1, speed_r);
+                break;
+            case 4:
+
+                break;
+            default:
+                break;
+        }
+
+
     }
 };
 
