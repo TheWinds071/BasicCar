@@ -95,7 +95,10 @@ private:
 
         float yaw_err = wrapAngleDeg(yaw_now - _yaw_ref_deg);
         float yaw_adjust = _pidForward.compute(0.0f, yaw_err);
-
+        // ===== 新增：直线航向输出限幅（防止出弯瞬间猛打导致摆头）=====
+        constexpr float YAW_ADJ_LIMIT = 0.15f;   // 建议先用 0.12~0.18 之间试
+        if (yaw_adjust >  YAW_ADJ_LIMIT) yaw_adjust =  YAW_ADJ_LIMIT;
+        if (yaw_adjust < -YAW_ADJ_LIMIT) yaw_adjust = -YAW_ADJ_LIMIT;
         setEndSpeed(0.0f, yaw_adjust);
     }
 
@@ -442,7 +445,7 @@ public:
                         if (falling) { // 到 C
                             Prompt::once(120);
                             //resetYawRef(); // 进入直线前重新锁航向
-                            // C 点出来：直走目标角 = A 点出发角 + 178°，并归一化到 [-180, 180]
+                            // C 点出来：直走目标角 = A 点出发角 + 172°，并归一化到 [-180, 180]
                             float target = _q2_yaw_A_deg + 178.0f;
                             while (target > 180.0f) target -= 360.0f;
                             while (target < -180.0f) target += 360.0f;

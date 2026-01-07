@@ -53,6 +53,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Drivers/BSP/Inc/UartTxRingBuffer.hpp
         Drivers/BSP/Inc/DbgSerial.hpp
         Drivers/BSP/Src/DbgSerial.cpp
+        Drivers/BSP/ICM45686/IMU_Benchmark.c
+        Drivers/BSP/ICM45686/IMU_Benchmark.h
 )
 
 # Add STM32CubeMX generated sources

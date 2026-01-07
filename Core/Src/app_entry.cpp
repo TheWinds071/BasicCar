@@ -22,15 +22,15 @@ Button btn(USER_KEY_GPIO_Port, USER_KEY_Pin, true);
 // 定义回调函数
 void onOkClick() {
     RTT_Log("Button Clicked!\r\n");
-    App_Pid_Set_Temp(0,2.0f,3.0f,4.0f);
-    App_Pid_Save();
+    // App_Pid_Set_Temp(0,2.0f,3.0f,4.0f);
+    // App_Pid_Save();
 }
 
 void setYawRef() {
     // 1) 记录长按时刻的 yaw
     g_yaw_mark = User_YPR[0];
-    LineFollower_SetYawRef(g_yaw_mark);
-    LineFollower_SetYaw();
+    // LineFollower_SetYawRef(g_yaw_mark);
+    // LineFollower_SetYaw();
 }
 
 // --- 引导函数实现 ---
