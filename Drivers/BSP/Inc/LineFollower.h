@@ -7,6 +7,7 @@
 
 #include "PidStorage.hpp"
 #include "Prompt.hpp"
+#include "DbgSerial.hpp"
 
 // ================== 配置参数 ==================
 #define LF_SENSOR_MASK   0x9D00  // PA15,PA12,PA11,PA10,PA8
@@ -28,6 +29,10 @@ private:
 
     bool  _yaw_ref_inited = false;
     float _yaw_ref_deg    = 0.0f;
+
+    // ====== Arc 段丢线保持方向 ======
+    float _arc_last_turn = 0.0f;   // 上一次有效循线的 turn_adjust（决定方向）
+    uint8_t _arc_lost_cnt = 0;     // 连续丢线次数（20ms一次）
 
     static float wrapAngleDeg(float err_deg) {
         while (err_deg > 180.0f) err_deg -= 360.0f;
@@ -67,11 +72,11 @@ private:
         float sum = 0.0f;
         int count = 0;
 
-        if (raw & GPIO_PIN_15) { sum += -5.0f; count++; }
-        if (raw & GPIO_PIN_12) { sum +=  2.0f; count++; }
+        if (raw & GPIO_PIN_15) { sum += -4.0f; count++; }
+        if (raw & GPIO_PIN_12) { sum += -2.0f; count++; }
         if (raw & GPIO_PIN_11) { sum +=  0.0f; count++; }
         if (raw & GPIO_PIN_10) { sum +=  2.0f; count++; }
-        if (raw & GPIO_PIN_8)  { sum +=  5.0f; count++; }
+        if (raw & GPIO_PIN_8)  { sum +=  4.0f; count++; }
 
         if (count == 0) return false;
         position_error_out = sum / (float)count;
@@ -92,18 +97,44 @@ private:
         setEndSpeed(0.0f, yaw_adjust);
     }
 
-    // ====== 半圆段：循线（raw!=0）======
+    // ====== 半圆段：循线（Arc段）======
+    // 优化：短暂丢线不停车，沿用上一次转向方向保持行进（baseSpeed=0.2适配）
     void driveArcLineFollow(uint16_t raw) {
         float position_error = 0.0f;
-        if (!calcPositionError(raw, position_error)) {
-            // 保险：算不出误差就停
+
+        if (calcPositionError(raw, position_error)) {
+            // 有线：正常循线
+            _arc_lost_cnt = 0;
+
+            float turn_adjust = _pidTurn.compute(0.0f, position_error);
+
+            // 限幅：base=0.2时建议不要超过0.35，避免过激
+            if (turn_adjust > 0.35f) turn_adjust = 0.35f;
+            if (turn_adjust < -0.35f) turn_adjust = -0.35f;
+
+            _arc_last_turn = turn_adjust;
+            setEndSpeed(turn_adjust, 0.0f);
+            return;
+        }
+
+        // 丢线：不停车，保持上次方向继续走
+        if (_arc_lost_cnt < 250) _arc_lost_cnt++;
+
+        // 固定保持幅度（不会让轮子反转）
+        float keep = 0.0f;
+        if (_arc_last_turn > 0.02f) keep = 0.12f;
+        else if (_arc_last_turn < -0.02f) keep = -0.12f;
+        else keep = 0.0f;
+
+        // 兜底：丢线太久（比如>1.0s）认为跑飞，停下更安全
+        // 20ms周期下 50次≈1.0s
+        if (_arc_lost_cnt > 50) {
             setSingleMotor(_ch_L1, _ch_L2, 0.0f);
             setSingleMotor(_ch_R1, _ch_R2, 0.0f);
             return;
         }
 
-        float turn_adjust = _pidTurn.compute(0.0f, position_error);
-        setEndSpeed(turn_adjust, 0.0f);
+        setEndSpeed(keep, 0.0f);
     }
 
     // ================== Q1 状态机 ==================
@@ -123,9 +154,36 @@ private:
     bool _q2_prev_hasLine = false;
     bool _q2_prompted = false;
 
+    // Q2 边沿去抖时间戳（ms）
+    uint32_t _q2_last_edge_ms = 0;
+    // 新增：Arc 段丢线稳定计数（防抖）
+    uint8_t _q2_noLine_cnt = 0;
+    uint8_t _q2_hasLine_cnt = 0; // 可选：如果你后面想做“有线稳定N次”
+
     void q2_enter(Q2State s) {
         _q2_state = s;
         _q2_prompted = false;
+
+        _q2_noLine_cnt = 0;
+        _q2_hasLine_cnt = 0;
+
+        _arc_lost_cnt = 0;
+        // _arc_last_turn 可选择保留或清零：清零更安全（默认向前走）
+        _arc_last_turn = 0.0f;
+
+        const char* name = "?";
+        switch (s) {
+            case Q2State::Idle:        name = "Idle"; break;
+            case Q2State::Straight_AB: name = "Straight_AB"; break;
+            case Q2State::Arc_BC:      name = "Arc_BC"; break;
+            case Q2State::Straight_CD: name = "Straight_CD"; break;
+            case Q2State::Arc_DA:      name = "Arc_DA"; break;
+            case Q2State::Done:        name = "Done"; break;
+            default: break;
+        }
+
+        uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
+        g_dbgTx3.printf("[Q2] -> %s raw=0x%04X yaw=%.2f\r\n", name, raw, User_YPR[0]);
     }
 
 public:
@@ -174,6 +232,7 @@ public:
     void q2_start_from_A() {
         // 你保证起跑 raw==0，所以 prev_hasLine=false 合理
         _q2_prev_hasLine = false;
+        _q2_last_edge_ms = HAL_GetTick(); // 新增：启动时记一下，避免刚起步就误触发
         resetYawRef();
         q2_enter(Q2State::Straight_AB);
         // A 点提示一次
@@ -192,13 +251,13 @@ public:
 
                 switch (_q1_state) {
                     case Q1State::Idle:
-                        setBaseSpeed(0.10f);
+                        setBaseSpeed(0.30f);
                         resetYawRef();
                         q1_enter(Q1State::GoStraight_AB);
                         break;
 
                     case Q1State::GoStraight_AB:
-                        setBaseSpeed(0.10f);
+                        setBaseSpeed(0.30f);
                         // 直线段：航向保持
                         driveStraightYawHold();
                         if (rising) {
@@ -222,9 +281,40 @@ public:
             }
 
             case 2: { // Q2: A->B->C->D->A，每过点提示一次（状态机）
-                // 边沿
-                bool rising  = (!_q2_prev_hasLine) && hasLine;      // 无线->有线：B 或 D
-                bool falling = (_q2_prev_hasLine) && (!hasLine);    // 有线->无线：C 或 A
+                // ===== Q2: 边沿去抖 + Arc段 falling 稳定判定 =====
+                const uint32_t DEBOUNCE_MS = 200;
+                uint32_t now = HAL_GetTick();
+                bool edge_ok = (now - _q2_last_edge_ms) >= DEBOUNCE_MS;
+
+                // 原始边沿（不稳定）
+                bool rising_raw  = (!_q2_prev_hasLine) && hasLine;
+                bool falling_raw = (_q2_prev_hasLine) && (!hasLine);
+
+                // 1) rising：仍然用全局去抖（避免B点连触发）
+                bool rising = edge_ok && rising_raw;
+
+                // 2) falling：在 Arc 段要求“连续丢线 N 次”才算（防止刚进B->C就短暂丢线）
+                bool falling = false;
+                constexpr uint8_t NO_LINE_N = 20; // 20ms周期下：约140ms丢线才算真正到点
+
+                if (_q2_state == Q2State::Arc_BC || _q2_state == Q2State::Arc_DA) {
+                    if (!hasLine) {
+                        if (_q2_noLine_cnt < 255) _q2_noLine_cnt++;
+                    } else {
+                        _q2_noLine_cnt = 0;
+                    }
+                    falling = edge_ok && (_q2_noLine_cnt >= NO_LINE_N);
+                } else {
+                    // 直线段 falling 不用（直线段只看 rising 到B/D）
+                    falling = edge_ok && falling_raw;
+                }
+
+                // 如果本次确认了有效边沿，更新时间戳，并清一下计数器（避免下一拍继续触发）
+                if (rising || falling) {
+                    _q2_last_edge_ms = now;
+                    _q2_noLine_cnt = 0;
+                    _q2_hasLine_cnt = 0;
+                }
 
                 switch (_q2_state) {
                     case Q2State::Idle:
@@ -233,7 +323,7 @@ public:
                         break;
 
                     case Q2State::Straight_AB:
-                        setBaseSpeed(0.10f);
+                        setBaseSpeed(0.30f);
                         driveStraightYawHold();
 
                         if (rising) { // 到 B
@@ -244,7 +334,7 @@ public:
                         break;
 
                     case Q2State::Arc_BC:
-                        setBaseSpeed(0.10f);
+                        setBaseSpeed(0.20f);
                         driveArcLineFollow(raw);
 
                         if (falling) { // 到 C
@@ -255,7 +345,7 @@ public:
                         break;
 
                     case Q2State::Straight_CD:
-                        setBaseSpeed(0.10f);
+                        setBaseSpeed(0.30f);
                         driveStraightYawHold();
 
                         if (rising) { // 到 D
@@ -266,7 +356,7 @@ public:
                         break;
 
                     case Q2State::Arc_DA:
-                        setBaseSpeed(0.10f);
+                        setBaseSpeed(0.20f);
                         driveArcLineFollow(raw);
 
                         if (falling) { // 回到 A
