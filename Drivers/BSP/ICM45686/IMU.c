@@ -1,13 +1,13 @@
 /* main.c / IMU.c file
-±àĞ´Õß£ºlisn3188
-ÍøÖ·£ºwww.chiplab7.com
-×÷ÕßE-mail£ºlisn3188@163.com
-±àÒë»·¾³£ºMDK-Lite  Version: 4.23
-³õ°æÊ±¼ä: 2012-04-25
-²âÊÔ£º ±¾³ÌĞòÒÑÔÚµÚÆßÊµÑéÊÒµÄmini IMUÉÏÍê³É²âÊÔ
-¹¦ÄÜ£º
-×ËÌ¬½âËã IMU
-½«´«¸ĞÆ÷µÄÊä³öÖµ½øĞĞ×ËÌ¬½âËã¡£µÃµ½Ä¿±êÔØÌåµÄ¸©Ñö½ÇºÍºá¹ö½Ç ºÍº½Ïò½Ç
+ç¼–å†™è€…ï¼šlisn3188
+ç½‘å€ï¼šwww.chiplab7.com
+ä½œè€…E-mailï¼šlisn3188@163.com
+ç¼–è¯‘ç¯å¢ƒï¼šMDK-Lite  Version: 4.23
+åˆç‰ˆæ—¶é—´: 2012-04-25
+æµ‹è¯•ï¼š æœ¬ç¨‹åºå·²åœ¨ç¬¬ä¸ƒå®éªŒå®¤çš„mini IMUä¸Šå®Œæˆæµ‹è¯•
+åŠŸèƒ½ï¼š
+å§¿æ€è§£ç®— IMU
+å°†ä¼ æ„Ÿå™¨çš„è¾“å‡ºå€¼è¿›è¡Œå§¿æ€è§£ç®—ã€‚å¾—åˆ°ç›®æ ‡è½½ä½“çš„ä¿¯ä»°è§’å’Œæ¨ªæ»šè§’ å’Œèˆªå‘è§’
 ------------------------------------
  */
 
@@ -22,37 +22,144 @@
 
 #include "SEGGER_RTT.h"
 
-/* ========= FPU ÓÑºÃ£ºÈ«²¿Ê¹ÓÃ float + xxxf ========= */
+extern int bsp_IcmGetRawCounts(int16_t accel_raw[3], int16_t gyro_raw[3], float *temp_degc);
+typedef struct
+{
+	float q0;
+	float q1;
+	float q2;
+	float q3;
+} Quaternion;
+
+static float NormAccz;
+static const float RtA = 57.2957795f;
+static const float Gyro_G = 0.03051756f;
+static const float Gyro_Gr = 0.0005326f;
+static Quaternion imu_quat = {1.0f, 0.0f, 0.0f, 0.0f};
+static _st_AngE imu_ang_state = {0};
+#define squa(Sq)   (((float)(Sq)) * ((float)(Sq)))
+
+static float Q_rsqrt(float number)
+{
+	float x2 = number * 0.5f;
+	float y = number;
+	uint32_t i;
+
+	memcpy(&i, &y, sizeof(i));
+	i = 0x5f3759dfu - (i >> 1);
+	memcpy(&y, &i, sizeof(y));
+	y = y * (1.5f - (x2 * y * y));
+	return y;
+}
+
+static void GetAngle(const _st_Mpu *pMpu, _st_AngE *pAngE, float dt)
+{
+	volatile struct V
+	{
+		float x;
+		float y;
+		float z;
+	} Gravity, Acc, Gyro, AccGravity;
+
+	static struct V GyroIntegError = {0};
+	static float KpDef = 0.8f;
+	static float KiDef = 0.0003f;
+	float q0_t, q1_t, q2_t, q3_t;
+	float NormQuat;
+	float HalfTime = dt * 0.5f;
+
+	Gravity.x = 2.0f * (imu_quat.q1 * imu_quat.q3 - imu_quat.q0 * imu_quat.q2);
+	Gravity.y = 2.0f * (imu_quat.q0 * imu_quat.q1 + imu_quat.q2 * imu_quat.q3);
+	Gravity.z = 1.0f - 2.0f * (imu_quat.q1 * imu_quat.q1 + imu_quat.q2 * imu_quat.q2);
+
+	NormQuat = Q_rsqrt(squa(pMpu->accX) + squa(pMpu->accY) + squa(pMpu->accZ));
+
+	Acc.x = pMpu->accX * NormQuat;
+	Acc.y = pMpu->accY * NormQuat;
+	Acc.z = pMpu->accZ * NormQuat;
+
+	AccGravity.x = (Acc.y * Gravity.z - Acc.z * Gravity.y);
+	AccGravity.y = (Acc.z * Gravity.x - Acc.x * Gravity.z);
+	AccGravity.z = (Acc.x * Gravity.y - Acc.y * Gravity.x);
+
+	GyroIntegError.x += AccGravity.x * KiDef;
+	GyroIntegError.y += AccGravity.y * KiDef;
+	GyroIntegError.z += AccGravity.z * KiDef;
+
+	Gyro.x = pMpu->gyroX * Gyro_Gr + KpDef * AccGravity.x + GyroIntegError.x;
+	Gyro.y = pMpu->gyroY * Gyro_Gr + KpDef * AccGravity.y + GyroIntegError.y;
+	Gyro.z = pMpu->gyroZ * Gyro_Gr + KpDef * AccGravity.z + GyroIntegError.z;
+
+	q0_t = (-imu_quat.q1 * Gyro.x - imu_quat.q2 * Gyro.y - imu_quat.q3 * Gyro.z) * HalfTime;
+	q1_t = ( imu_quat.q0 * Gyro.x - imu_quat.q3 * Gyro.y + imu_quat.q2 * Gyro.z) * HalfTime;
+	q2_t = ( imu_quat.q3 * Gyro.x + imu_quat.q0 * Gyro.y - imu_quat.q1 * Gyro.z) * HalfTime;
+	q3_t = (-imu_quat.q2 * Gyro.x + imu_quat.q1 * Gyro.y + imu_quat.q0 * Gyro.z) * HalfTime;
+
+	imu_quat.q0 += q0_t;
+	imu_quat.q1 += q1_t;
+	imu_quat.q2 += q2_t;
+	imu_quat.q3 += q3_t;
+
+	NormQuat = Q_rsqrt(squa(imu_quat.q0) + squa(imu_quat.q1) + squa(imu_quat.q2) + squa(imu_quat.q3));
+	imu_quat.q0 *= NormQuat;
+	imu_quat.q1 *= NormQuat;
+	imu_quat.q2 *= NormQuat;
+	imu_quat.q3 *= NormQuat;
+
+	{
+		float vecxZ = 2.0f * imu_quat.q0 * imu_quat.q2 - 2.0f * imu_quat.q1 * imu_quat.q3;
+		float vecyZ = 2.0f * imu_quat.q2 * imu_quat.q3 + 2.0f * imu_quat.q0 * imu_quat.q1;
+		float veczZ = 1.0f - 2.0f * imu_quat.q1 * imu_quat.q1 - 2.0f * imu_quat.q2 * imu_quat.q2;
+
+#ifdef YAW_GYRO
+		*(float *)pAngE = atan2f(2.0f * imu_quat.q1 * imu_quat.q2 + 2.0f * imu_quat.q0 * imu_quat.q3,
+		                         1.0f - 2.0f * imu_quat.q2 * imu_quat.q2 - 2.0f * imu_quat.q3 * imu_quat.q3) * RtA;
+#else
+		float yaw_G = pMpu->gyroZ * Gyro_G;
+		if ((yaw_G > 3.0f) || (yaw_G < -3.0f))
+		{
+			pAngE->yaw += yaw_G * dt;
+		}
+#endif
+		pAngE->pitch = asinf(vecxZ) * RtA;
+		pAngE->roll = atan2f(vecyZ, veczZ) * RtA;
+
+		NormAccz = pMpu->accX * vecxZ + pMpu->accY * vecyZ + pMpu->accZ * veczZ;
+	}
+}
+
+
+/* ========= FPU å‹å¥½ï¼šå…¨éƒ¨ä½¿ç”¨ float + xxxf ========= */
 #ifndef PI_F
 #define PI_F        3.14159265358979323846f
 #endif
 #define DEG2RAD_F   (PI_F / 180.0f)
 #define RAD2DEG_F   (180.0f / PI_F)
 
-/* XYZ½á¹¹Ìå */
+/* XYZç»“æ„ä½“ */
 xyz_f_t north, west;
 
-/* Èç¹ûÕâĞ©±äÁ¿²»ÔÚÖĞ¶ÏÀïÒì²½ĞŞ¸Ä£¬½¨ÒéÈ¥µô volatile£¨¿ÉÏÔÖø¼õÉÙÄÚ´æ¶ÁĞ´£© */
-volatile float exInt, eyInt, ezInt;  // Îó²î»ı·Ö
-volatile float q0, q1, q2, q3;       // È«¾ÖËÄÔªÊı
+/* å¦‚æœè¿™äº›å˜é‡ä¸åœ¨ä¸­æ–­é‡Œå¼‚æ­¥ä¿®æ”¹ï¼Œå»ºè®®å»æ‰ volatileï¼ˆå¯æ˜¾è‘—å‡å°‘å†…å­˜è¯»å†™ï¼‰ */
+volatile float exInt, eyInt, ezInt;  // è¯¯å·®ç§¯åˆ†
+volatile float q0, q1, q2, q3;       // å…¨å±€å››å…ƒæ•°
 
-volatile float yaw[5] = {0,0,0,0,0};  // ´¦Àíº½ÏòµÄÔöÖµ
+volatile float yaw[5] = {0,0,0,0,0};  // å¤„ç†èˆªå‘çš„å¢å€¼
 int16_t Ax_offset = 0, Ay_offset = 0;
 
-float TTangles_gyro[7]; // Í®Í®ÂË²¨½Ç¶È
+float TTangles_gyro[7]; // å½¤å½¤æ»¤æ³¢è§’åº¦
 float Kp = 10.5f;
 
 extern int bsp_IcmGetRawData(float accel_mg[3], float gyro_dps[3], float *temp_degc);
 extern int setup_imu(int use_ln, int accel_en, int gyro_en);
 
-/* ========== ¸üÊÊºÏ H750 FPU µÄ invSqrt ==========
- * ÓĞÓ²¼ş¸¡µãÊ±£º1/sqrtf(x) Í¨³£»áÖ±½ÓÉú³É VSQRT.F32 + VDIV/VMUL
- * ÎŞÓ²¼ş¸¡µãÊ±£ºfallback Ê¹ÓÃ°²È«Ğ´·¨£¨memcpy ±ÜÃâÑÏ¸ñ±ğÃû UB£©
+/* ========== æ›´é€‚åˆ H750 FPU çš„ invSqrt ==========
+ * æœ‰ç¡¬ä»¶æµ®ç‚¹æ—¶ï¼š1/sqrtf(x) é€šå¸¸ä¼šç›´æ¥ç”Ÿæˆ VSQRT.F32 + VDIV/VMUL
+ * æ— ç¡¬ä»¶æµ®ç‚¹æ—¶ï¼šfallback ä½¿ç”¨å®‰å…¨å†™æ³•ï¼ˆmemcpy é¿å…ä¸¥æ ¼åˆ«å UBï¼‰
  */
 static inline float invSqrt1(float x)
 {
 #if defined(__ARM_FP) && (__ARM_FP > 0)
-    // x ±ØĞë > 0
+    // x å¿…é¡» > 0
     return 1.0f / sqrtf(x);
 #else
     float halfx = 0.5f * x;
@@ -67,13 +174,13 @@ static inline float invSqrt1(float x)
 #endif
 }
 
-/**************************ÊµÏÖº¯Êı********************************************
-*º¯ÊıÔ­ĞÍ:	   void IMU_init(void)
-*¹¦¡¡¡¡ÄÜ:	  ³õÊ¼»¯IMUÏà¹Ø
+/**************************å®ç°å‡½æ•°********************************************
+*å‡½æ•°åŸå‹:	   void IMU_init(void)
+*åŠŸã€€ã€€èƒ½:	  åˆå§‹åŒ–IMUç›¸å…³
 *******************************************************************************/
 void IMU_init(void)
 {
-    //while(!ICM_Init());	   //³õÊ¼»¯ICM42688ÅäÖÃ
+    //while(!ICM_Init());	   //åˆå§‹åŒ–ICM42688é…ç½®
     if (0x00 == setup_imu(1,1,1))
     {
         q0 = 1.0f;
@@ -91,7 +198,7 @@ void IMU_init(void)
     RTT_Log("IMU ERROR!!\r\n");
 }
 
-/* ========== ÍÓÂİ·½²î¹À¼Æ£ºÈ« float£¬±ÜÃâ double ´¥·¢Èí¸¡µã ========== */
+/* ========== é™€èºæ–¹å·®ä¼°è®¡ï¼šå…¨ floatï¼Œé¿å… double è§¦å‘è½¯æµ®ç‚¹ ========== */
 #define GYRO_VAR_WIN   100
 
 static float Gyro_fill[3][GYRO_VAR_WIN];
@@ -100,7 +207,7 @@ static float sqrGyro_total[3];
 static int GyroinitFlag = 0;
 static int GyroCount = 0;
 
-// ·½²î£ºVar = E[x^2] - (E[x])^2
+// æ–¹å·®ï¼šVar = E[x^2] - (E[x])^2
 void calGyroVariance(const float data[3], int length, float sqrResult[3], float avgResult[3])
 {
     int i;
@@ -157,11 +264,11 @@ void calGyroVariance(const float data[3], int length, float sqrResult[3], float 
 float gyro_offset[3] = {0};
 int CalCount = 0;
 
-/**************************ÊµÏÖº¯Êı********************************************
-*º¯ÊıÔ­ĞÍ:	   void IMU_getValues(float * values)
-*¹¦¡¡¡¡ÄÜ:	 ¶ÁÈ¡¼ÓËÙ¶È/ÍÓÂİÒÇ/£¨¿ÉÑ¡´ÅÁ¦¼Æ£©µ±Ç°Öµ
-*ËµÃ÷£ºÄãÏÖÓĞ bsp_IcmGetRawData Ö»Ìá¹© accel+gyro+temp
-*      ËùÒÔÕâÀï values[6..8] Ä¬ÈÏÌî 0£¬±ÜÃâÎ´³õÊ¼»¯
+/**************************å®ç°å‡½æ•°********************************************
+*å‡½æ•°åŸå‹:	   void IMU_getValues(float * values)
+*åŠŸã€€ã€€èƒ½:	 è¯»å–åŠ é€Ÿåº¦/é™€èºä»ª/ï¼ˆå¯é€‰ç£åŠ›è®¡ï¼‰å½“å‰å€¼
+*è¯´æ˜ï¼šä½ ç°æœ‰ bsp_IcmGetRawData åªæä¾› accel+gyro+temp
+*      æ‰€ä»¥è¿™é‡Œ values[6..8] é»˜è®¤å¡« 0ï¼Œé¿å…æœªåˆå§‹åŒ–
 *******************************************************************************/
 void IMU_getValues(float * values)
 {
@@ -210,17 +317,17 @@ void IMU_getValues(float * values)
     values[4] = accgyroval[4] - gyro_offset[1];
     values[5] = accgyroval[5] - gyro_offset[2];
 
-    // Äãµ±Ç°Çı¶¯Ã»ÓĞ¸ø´ÅÁ¦¼Æ£ºÕâÀïÌî 0£¬ºóĞø AHRS »á×Ô¶¯Ìø¹ı´ÅÁ¦¼Æ¹éÒ»»¯
+    // ä½ å½“å‰é©±åŠ¨æ²¡æœ‰ç»™ç£åŠ›è®¡ï¼šè¿™é‡Œå¡« 0ï¼Œåç»­ AHRS ä¼šè‡ªåŠ¨è·³è¿‡ç£åŠ›è®¡å½’ä¸€åŒ–
     values[6] = 0.0f; // mx
     values[7] = 0.0f; // my
     values[8] = 0.0f; // mz
 
-    // Á¿³ÌËµÃ÷£ºÄã×¢ÊÍÀïĞ´ 1000dps, 32.8 LSB/(dps) ¶ÔÓ¦ 1¶È/s
+    // é‡ç¨‹è¯´æ˜ï¼šä½ æ³¨é‡Šé‡Œå†™ 1000dps, 32.8 LSB/(dps) å¯¹åº” 1åº¦/s
 }
 
-/**************************ÊµÏÖº¯Êı********************************************
-*º¯ÊıÔ­ĞÍ:	   void IMU_AHRSupdate
-*¹¦¡¡¡¡ÄÜ:	 ¸üĞÂAHRS ¸üĞÂËÄÔªÊı
+/**************************å®ç°å‡½æ•°********************************************
+*å‡½æ•°åŸå‹:	   void IMU_AHRSupdate
+*åŠŸã€€ã€€èƒ½:	 æ›´æ–°AHRS æ›´æ–°å››å…ƒæ•°
 *******************************************************************************/
 //#define Kp 0.5f
 #define Ki 0.001f
@@ -234,7 +341,7 @@ void IMU_AHRSupdate(float gx, float gy, float gz,
     float ex, ey, ez, halfT;
     float tempq0, tempq1, tempq2, tempq3;
 
-    // Ô¤¼ÆËã
+    // é¢„è®¡ç®—
     float q0q0 = q0*q0;
     float q0q1 = q0*q1;
     float q0q2 = q0*q2;
@@ -248,7 +355,7 @@ void IMU_AHRSupdate(float gx, float gy, float gz,
 
     halfT = 0.01f;
 
-    // ¼ÓËÙ¶È¹éÒ»»¯£¨·À 0£©
+    // åŠ é€Ÿåº¦å½’ä¸€åŒ–ï¼ˆé˜² 0ï¼‰
     float acc2 = ax*ax + ay*ay + az*az;
     if (acc2 > 0.0f)
     {
@@ -259,11 +366,11 @@ void IMU_AHRSupdate(float gx, float gy, float gz,
     }
     else
     {
-        // ¼ÓËÙ¶ÈÎŞĞ§Ôò²»¸üĞÂ£¨°´ÄãÔ­Âß¼­¿ÉÒÔ¼ÌĞø£¬µ«»áÒıÈë NaN ·çÏÕ£©
+        // åŠ é€Ÿåº¦æ— æ•ˆåˆ™ä¸æ›´æ–°ï¼ˆæŒ‰ä½ åŸé€»è¾‘å¯ä»¥ç»§ç»­ï¼Œä½†ä¼šå¼•å…¥ NaN é£é™©ï¼‰
         return;
     }
 
-    // ´ÅÁ¦¼Æ¹éÒ»»¯£¨ÄãµÄËã·¨´ÅÁ¦¼Æ²¿·ÖÄ¿Ç°×¢ÊÍµôÁË£¬µ«ÕâÀïÈÔ×ö±£»¤£©
+    // ç£åŠ›è®¡å½’ä¸€åŒ–ï¼ˆä½ çš„ç®—æ³•ç£åŠ›è®¡éƒ¨åˆ†ç›®å‰æ³¨é‡Šæ‰äº†ï¼Œä½†è¿™é‡Œä»åšä¿æŠ¤ï¼‰
     float mag2 = mx*mx + my*my + mz*mz;
     if (mag2 > 0.0f)
     {
@@ -272,14 +379,14 @@ void IMU_AHRSupdate(float gx, float gy, float gz,
         my *= norm;
         mz *= norm;
     }
-    // else: ÎŞ´ÅÁ¦¼Æ¾ÍÌø¹ı£¨ÄãÏÂÃæÎó²îÏîÒ²Ã»ÓÃ´ÅÁ¦¼Æ£©
+    // else: æ— ç£åŠ›è®¡å°±è·³è¿‡ï¼ˆä½ ä¸‹é¢è¯¯å·®é¡¹ä¹Ÿæ²¡ç”¨ç£åŠ›è®¡ï¼‰
 
-    // ÖØÁ¦·½Ïò¹À¼Æ£¨ÓÉËÄÔªÊı»»Ëã£©
+    // é‡åŠ›æ–¹å‘ä¼°è®¡ï¼ˆç”±å››å…ƒæ•°æ¢ç®—ï¼‰
     vx = 2.0f*(q1q3 - q0q2);
     vy = 2.0f*(q0q1 + q2q3);
     vz = q0q0 - q1q1 - q2q2 + q3q3;
 
-    /* north / west ¼ÆËã±£³ÖÔ­Ñù£¨È« float£© */
+    /* north / west è®¡ç®—ä¿æŒåŸæ ·ï¼ˆå…¨ floatï¼‰ */
     north.x = 1.0f - 2.0f*(q3q3 + q2q2);
     north.y = 2.0f * (-q0q3 + q1q2);
     north.z = 2.0f * ( q0q2 - q1q3);
@@ -288,12 +395,12 @@ void IMU_AHRSupdate(float gx, float gy, float gz,
     west.y  = 1.0f - 2.0f*(q3q3 + q1q1);
     west.z  = 2.0f * (-q0q1 + q2q3);
 
-    // Îó²î£º²âµÃÖØÁ¦Óë¹À¼ÆÖØÁ¦µÄ²æ»ı
+    // è¯¯å·®ï¼šæµ‹å¾—é‡åŠ›ä¸ä¼°è®¡é‡åŠ›çš„å‰ç§¯
     ex = (ay*vz - az*vy);
     ey = (az*vx - ax*vz);
     ez = (ax*vy - ay*vx);
 
-    // ÄãÔ­À´ÊÇ ¡°Èı¸ö¶¼²»Îª0²ÅĞŞÕı¡±£¬ÎÒ±£ÁôÕâ¸öÌõ¼şÒÔ²»¸Ä±äĞĞÎª
+    // ä½ åŸæ¥æ˜¯ â€œä¸‰ä¸ªéƒ½ä¸ä¸º0æ‰ä¿®æ­£â€ï¼Œæˆ‘ä¿ç•™è¿™ä¸ªæ¡ä»¶ä»¥ä¸æ”¹å˜è¡Œä¸º
     if (ex != 0.0f && ey != 0.0f && ez != 0.0f)
     {
         exInt += ex * Ki * halfT;
@@ -305,30 +412,47 @@ void IMU_AHRSupdate(float gx, float gy, float gz,
         gz += Kp*ez + ezInt;
     }
 
-    // ËÄÔªÊıÎ¢·Ö
-    tempq0 = q0 + (-q1*gx - q2*gy - q3*gz)*halfT;
-    tempq1 = q1 + ( q0*gx + q2*gz - q3*gy)*halfT;
-    tempq2 = q2 + ( q0*gy - q1*gz + q3*gx)*halfT;
-    tempq3 = q3 + ( q0*gz + q1*gy - q2*gx)*halfT;
+    float temp_degc = 0.0f;
+    int16_t accel_raw[3] = {0};
+    int16_t gyro_raw[3] = {0};
+    _st_Mpu mpu_data = {0};
+    const float dt = 1.0f / 200.0f;
 
-    // ¹éÒ»»¯
-    norm = invSqrt1(tempq0*tempq0 + tempq1*tempq1 + tempq2*tempq2 + tempq3*tempq3);
-    q0 = tempq0 * norm;
-    q1 = tempq1 * norm;
-    q2 = tempq2 * norm;
-    q3 = tempq3 * norm;
+    bsp_IcmGetRawCounts(accel_raw, gyro_raw, &temp_degc);
+    mpu_data.accX = accel_raw[0];
+    mpu_data.accY = accel_raw[1];
+    mpu_data.accZ = accel_raw[2];
+    mpu_data.gyroX = gyro_raw[0];
+    mpu_data.gyroY = gyro_raw[1];
+    mpu_data.gyroZ = gyro_raw[2];
+
+    GetAngle(&mpu_data, &imu_ang_state, dt);
+
+    q[0] = imu_quat.q0;
+    q[1] = imu_quat.q1;
+    q[2] = imu_quat.q2;
+    q[3] = imu_quat.q3;
 }
 
-/**************************ÊµÏÖº¯Êı********************************************
-*º¯ÊıÔ­ĞÍ:	   void IMU_getQ(float * q)
-*¹¦¡¡¡¡ÄÜ:	 ¸üĞÂËÄÔªÊı ·µ»Øµ±Ç°ËÄÔªÊı
-*******************************************************************************/
-float mygetqval[9];
+    float temp_degc = 0.0f;
+    int16_t accel_raw[3] = {0};
+    int16_t gyro_raw[3] = {0};
+    _st_Mpu mpu_data = {0};
+    const float dt = 1.0f / 200.0f;
 
-void IMU_getQ(float * q)
-{
-    IMU_getValues(mygetqval);
+    bsp_IcmGetRawCounts(accel_raw, gyro_raw, &temp_degc);
+    mpu_data.accX = accel_raw[0];
+    mpu_data.accY = accel_raw[1];
+    mpu_data.accZ = accel_raw[2];
+    mpu_data.gyroX = gyro_raw[0];
+    mpu_data.gyroY = gyro_raw[1];
+    mpu_data.gyroZ = gyro_raw[2];
 
+    GetAngle(&mpu_data, &imu_ang_state, dt);
+
+    angles[0] = imu_ang_state.yaw;
+    angles[1] = imu_ang_state.pitch;
+    angles[2] = imu_ang_state.roll;
     IMU_AHRSupdate(mygetqval[3] * DEG2RAD_F,
                    mygetqval[4] * DEG2RAD_F,
                    mygetqval[5] * DEG2RAD_F,
@@ -341,9 +465,9 @@ void IMU_getQ(float * q)
     q[3] = q3;
 }
 
-/**************************ÊµÏÖº¯Êı********************************************
-*º¯ÊıÔ­ĞÍ:	   void IMU_getYawPitchRoll(float * angles)
-*¹¦¡¡¡¡ÄÜ:	 ¸üĞÂËÄÔªÊı ·µ»Ø½âËã×ËÌ¬½Ç
+/**************************å®ç°å‡½æ•°********************************************
+*å‡½æ•°åŸå‹:	   void IMU_getYawPitchRoll(float * angles)
+*åŠŸã€€ã€€èƒ½:	 æ›´æ–°å››å…ƒæ•° è¿”å›è§£ç®—å§¿æ€è§’
 *******************************************************************************/
 void IMU_getYawPitchRoll(float * angles)
 {

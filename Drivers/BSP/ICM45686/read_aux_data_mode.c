@@ -103,12 +103,15 @@ int si_print_error_if_any(int rc)
 * 修改日期：
 * 备    注： 使用SPI读取寄存器时要注意:最高位为读写位，详见datasheet page50.
 *******************************************************************************/
+#define ICM45686_CS_LOW()  HAL_GPIO_WritePin(SPI6_CS_GPIO_Port, SPI6_CS_Pin, GPIO_PIN_RESET)
+#define ICM45686_CS_HIGH() HAL_GPIO_WritePin(SPI6_CS_GPIO_Port, SPI6_CS_Pin, GPIO_PIN_SET)
+
 static int icm45686_read_regs(uint8_t reg, uint8_t* buf, uint32_t len)
 {
     uint8_t regval = 0;
 #if defined(ICM_USE_HARD_SPI)
     reg |= 0x80;
-    HAL_GPIO_WritePin(SPI6_CS_GPIO_Port, SPI6_CS_Pin, GPIO_PIN_RESET);
+    ICM45686_CS_LOW();
     /* 写入要读的寄存器地址 */
     HAL_SPI_TransmitReceive(&hspi6, &reg, &regval, 1, 1000);
     /* 读取寄存器数据 */
@@ -118,7 +121,7 @@ static int icm45686_read_regs(uint8_t reg, uint8_t* buf, uint32_t len)
 		len--;
 		buf++;
 	}
-    HAL_GPIO_WritePin(SPI6_CS_GPIO_Port, SPI6_CS_Pin, GPIO_PIN_SET);
+    ICM45686_CS_HIGH();
 #elif defined(ICM_USE_I2C)
 	IIC_Read_nByte(ICM_I2C_ADDR, reg, len, buf);
 #endif
@@ -129,12 +132,12 @@ static uint8_t io_write_reg(uint8_t reg, uint8_t value)
 {
     uint8_t regval = 0;
 #if defined(ICM_USE_HARD_SPI)
-    HAL_GPIO_WritePin(SPI6_CS_GPIO_Port, SPI6_CS_Pin, GPIO_PIN_RESET);
+    ICM45686_CS_LOW();
     /* 写入要读的寄存器地址 */
     HAL_SPI_TransmitReceive(&hspi6, &reg, &regval, 1, 1000);
     /* 读取寄存器数据 */
     HAL_SPI_TransmitReceive(&hspi6, &value, &regval, 1, 1000);
-    HAL_GPIO_WritePin(SPI6_CS_GPIO_Port, SPI6_CS_Pin, GPIO_PIN_SET);
+    ICM45686_CS_HIGH();
 #elif defined(ICM_USE_I2C)
 	IIC_Write_nByte(ICM_I2C_ADDR, reg, 1, &value);
 #endif
@@ -290,5 +293,23 @@ int bsp_IcmGetRawData(float accel_mg[3], float gyro_dps[3], float *temp_degc)
 	gyro_dps[1] = (float)((d.gyro_data[1] * 1000 /* dps */) / 32768.0);
 	gyro_dps[2] = (float)((d.gyro_data[2] * 1000 /* dps */) / 32768.0);
 	*temp_degc  = (float)(25 + (d.temp_data / 128.0));
+	return 0;
+}
+
+int bsp_IcmGetRawCounts(int16_t accel_raw[3], int16_t gyro_raw[3], float *temp_degc)
+{
+	int rc = 0;
+	inv_imu_sensor_data_t d;
+
+	rc |= inv_imu_get_register_data(&imu_dev, &d);
+	SI_CHECK_RC(rc);
+
+	accel_raw[0] = d.accel_data[0];
+	accel_raw[1] = d.accel_data[1];
+	accel_raw[2] = d.accel_data[2];
+	gyro_raw[0] = d.gyro_data[0];
+	gyro_raw[1] = d.gyro_data[1];
+	gyro_raw[2] = d.gyro_data[2];
+	*temp_degc = (float)(25 + (d.temp_data / 128.0));
 	return 0;
 }
