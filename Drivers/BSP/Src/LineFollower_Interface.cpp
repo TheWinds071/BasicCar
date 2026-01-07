@@ -33,6 +33,8 @@ void LineFollower_OnTimer(void) {
         if (q != lastQ) {
             controller->onQuestionChanged(q);
             if (q == 2) controller->q2_start_from_A(); // A点提示一次 + 锁航向
+            if (q == 3) controller->q3_start_from_A(); // A点提示一次 + 锁航向
+            if (q == 4) controller->q4_start_from_A();
             lastQ = q;
         }
 

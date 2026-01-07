@@ -30,6 +30,8 @@ private:
     bool  _yaw_ref_inited = false;
     float _yaw_ref_deg    = 0.0f;
 
+    float _q2_yaw_A_deg = 0.0f;
+
     // ====== Arc 段丢线保持方向 ======
     float _arc_last_turn = 0.0f;   // 上一次有效循线的 turn_adjust（决定方向）
     uint8_t _arc_lost_cnt = 0;     // 连续丢线次数（20ms一次）
@@ -186,6 +188,79 @@ private:
         g_dbgTx3.printf("[Q2] -> %s raw=0x%04X yaw=%.2f\r\n", name, raw, User_YPR[0]);
     }
 
+    // ================== Q3 状态机：A->C->B->D->A ==================
+    // 说明：你的地图为矩形 A,B,C,D 顺时针；B->C 与 D->A 是半圆段（循线）
+    // 本题路径拆解：
+    // A->C：直线（锁航向）
+    // C->B：半圆（循线）
+    // B->D：直线（锁航向）
+    // D->A：半圆（循线）
+
+    enum class Q3State : uint8_t { Idle=0, Straight_AC, Arc_CB, Straight_BD, Arc_DA, Done };
+    Q3State _q3_state = Q3State::Idle;
+    bool _q3_prev_hasLine = false;
+    bool _q3_prompted = false;
+
+    uint32_t _q3_last_edge_ms = 0;
+    uint8_t _q3_noLine_cnt = 0;
+
+    void q3_enter(Q3State s) {
+        _q3_state = s;
+        _q3_prompted = false;
+        _q3_noLine_cnt = 0;
+
+        _arc_lost_cnt = 0;
+        _arc_last_turn = 0.0f;
+
+        const char* name = "?";
+        switch (s) {
+            case Q3State::Idle:        name = "Idle"; break;
+            case Q3State::Straight_AC: name = "Straight_AC"; break;
+            case Q3State::Arc_CB:      name = "Arc_CB"; break;
+            case Q3State::Straight_BD: name = "Straight_BD"; break;
+            case Q3State::Arc_DA:      name = "Arc_DA"; break;
+            case Q3State::Done:        name = "Done"; break;
+            default: break;
+        }
+
+        uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
+        g_dbgTx3.printf("[Q3] -> %s raw=0x%04X yaw=%.2f\r\n", name, raw, User_YPR[0]);
+    }
+
+    // ================== Q4 状态机：按 Q3 路径跑 4 圈后停车 ==================
+    enum class Q4State : uint8_t { Idle=0, Straight_AC, Arc_CB, Straight_BD, Arc_DA, Done };
+    Q4State _q4_state = Q4State::Idle;
+
+    bool _q4_prev_hasLine = false;
+    uint32_t _q4_last_edge_ms = 0;
+    uint8_t _q4_noLine_cnt = 0;
+
+    uint8_t _q4_lap = 0;                 // 已完成圈数
+    static constexpr uint8_t Q4_LAPS = 4;
+
+    void q4_enter(Q4State s) {
+        _q4_state = s;
+        _q4_noLine_cnt = 0;
+
+        _arc_lost_cnt = 0;
+        _arc_last_turn = 0.0f;
+
+        const char* name = "?";
+        switch (s) {
+            case Q4State::Idle:        name = "Idle"; break;
+            case Q4State::Straight_AC: name = "Straight_AC"; break;
+            case Q4State::Arc_CB:      name = "Arc_CB"; break;
+            case Q4State::Straight_BD: name = "Straight_BD"; break;
+            case Q4State::Arc_DA:      name = "Arc_DA"; break;
+            case Q4State::Done:        name = "Done"; break;
+            default: break;
+        }
+
+        uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
+        g_dbgTx3.printf("[Q4] -> %s lap=%u raw=0x%04X yaw=%.2f\r\n", name, (unsigned)_q4_lap, raw, User_YPR[0]);
+    }
+
+
 public:
     LineFollower(TIM_HandleTypeDef* htim, uint32_t l1, uint32_t l2, uint32_t r1, uint32_t r2)
         : _htim(htim), _ch_L1(l1), _ch_L2(l2), _ch_R1(r1), _ch_R2(r2),
@@ -226,6 +301,8 @@ public:
     void onQuestionChanged(uint8_t q) {
         if (q != 1) { _q1_state = Q1State::Idle; _q1_prompted = false; }
         if (q != 2) { _q2_state = Q2State::Idle; _q2_prompted = false; }
+        if (q != 3) { _q3_state = Q3State::Idle; _q3_prompted = false; }
+        if (q != 4) { _q4_state = Q4State::Idle; _q4_lap = 0; }
     }
 
     // Q2 显式启动：进第二题时在 A 点提示一次
@@ -233,11 +310,36 @@ public:
         // 你保证起跑 raw==0，所以 prev_hasLine=false 合理
         _q2_prev_hasLine = false;
         _q2_last_edge_ms = HAL_GetTick(); // 新增：启动时记一下，避免刚起步就误触发
+        _q2_yaw_A_deg = User_YPR[0];
         resetYawRef();
         q2_enter(Q2State::Straight_AB);
         // A 点提示一次
         Prompt::once(120);
         _q2_prompted = true;
+    }
+
+    // Q3 显式启动：进第三题时在 A 点提示一次
+    void q3_start_from_A() {
+        _q3_prev_hasLine = false;
+        _q3_last_edge_ms = HAL_GetTick(); // 避免刚切题误触发
+        resetYawRef();
+        q3_enter(Q3State::Straight_AC);
+
+        Prompt::once(120);   // A 点提示一次
+        _q3_prompted = true;
+    }
+
+    // Q4 显式启动：从 A 点开始，提示一次，然后开始第 1 圈
+    void q4_start_from_A() {
+        _q4_prev_hasLine = false;
+        _q4_last_edge_ms = HAL_GetTick();
+        _q4_noLine_cnt = 0;
+
+        _q4_lap = 0;
+        resetYawRef();
+        q4_enter(Q4State::Straight_AC);
+
+        Prompt::once(120); // A 点提示一次（起步）
     }
 
     // ===== ISR 主逻辑 =====
@@ -339,7 +441,12 @@ public:
 
                         if (falling) { // 到 C
                             Prompt::once(120);
-                            resetYawRef(); // 进入直线前重新锁航向
+                            //resetYawRef(); // 进入直线前重新锁航向
+                            // C 点出来：直走目标角 = A 点出发角 + 178°，并归一化到 [-180, 180]
+                            float target = _q2_yaw_A_deg + 178.0f;
+                            while (target > 180.0f) target -= 360.0f;
+                            while (target < -180.0f) target += 360.0f;
+                            setYawRefDeg(target);
                             q2_enter(Q2State::Straight_CD);
                         }
                         break;
@@ -375,10 +482,197 @@ public:
                 break;
             }
 
+            case 3: {
+                // Q3: A->C->B->D->A，每过点提示一次（状态机）
+                const uint32_t DEBOUNCE_MS = 200;
+                uint32_t now = HAL_GetTick();
+                bool edge_ok = (now - _q3_last_edge_ms) >= DEBOUNCE_MS;
+
+                bool rising_raw = (!_q3_prev_hasLine) && hasLine; // 无线->有线（到点：B 或 D）
+                bool falling_raw = (_q3_prev_hasLine) && (!hasLine); // 有线->无线（到点：C 或 A）
+
+                bool rising = edge_ok && rising_raw;
+
+                bool falling = false;
+                constexpr uint8_t NO_LINE_N = 20; // 20ms周期下约140ms丢线才认为真正到点
+
+                // 在半圆段用“连续丢线N次”判定 falling，更稳
+                if (_q3_state == Q3State::Arc_CB || _q3_state == Q3State::Arc_DA) {
+                    if (!hasLine) {
+                        if (_q3_noLine_cnt < 255) _q3_noLine_cnt++;
+                    } else {
+                        _q3_noLine_cnt = 0;
+                    }
+                    falling = edge_ok && (_q3_noLine_cnt >= NO_LINE_N);
+                } else {
+                    falling = edge_ok && falling_raw;
+                }
+
+                if (rising || falling) {
+                    _q3_last_edge_ms = now;
+                    _q3_noLine_cnt = 0;
+                }
+
+                switch (_q3_state) {
+                    case Q3State::Idle:
+                        // 兜底启动（正常情况下在切到Q3时外层会调用 q3_start_from_A）
+                        q3_start_from_A();
+                        break;
+
+                    case Q3State::Straight_AC:
+                        setBaseSpeed(0.30f);
+                        driveStraightYawHold();
+                        if (falling) {
+                            // 到 C（有线->无线）
+                            Prompt::once(120);
+                            _pidTurn.reset();
+                            q3_enter(Q3State::Arc_CB);
+                        }
+                        break;
+
+                    case Q3State::Arc_CB:
+                        setBaseSpeed(0.20f);
+                        driveArcLineFollow(raw);
+                        if (rising) {
+                            // 到 B（无线->有线）
+                            Prompt::once(120);
+                            resetYawRef();
+                            q3_enter(Q3State::Straight_BD);
+                        }
+                        break;
+
+                    case Q3State::Straight_BD:
+                        setBaseSpeed(0.30f);
+                        driveStraightYawHold();
+                        if (rising) {
+                            // 到 D（无线->有线）
+                            Prompt::once(120);
+                            _pidTurn.reset();
+                            q3_enter(Q3State::Arc_DA);
+                        }
+                        break;
+
+                    case Q3State::Arc_DA:
+                        setBaseSpeed(0.20f);
+                        driveArcLineFollow(raw);
+                        if (falling) {
+                            // 回到 A（有线->无线）
+                            Prompt::once(120);
+                            q3_enter(Q3State::Done);
+                        }
+                        break;
+
+                    case Q3State::Done:
+                        setSingleMotor(_ch_L1, _ch_L2, 0.0f);
+                        setSingleMotor(_ch_R1, _ch_R2, 0.0f);
+                        break;
+                }
+
+                _q3_prev_hasLine = hasLine;
+                break;
+            }
+
+            case 4: {
+                // Q4: 按 Q3 路径跑 4 圈后停车
+                const uint32_t DEBOUNCE_MS = 200;
+                uint32_t now = HAL_GetTick();
+                bool edge_ok = (now - _q4_last_edge_ms) >= DEBOUNCE_MS;
+
+                bool rising_raw = (!_q4_prev_hasLine) && hasLine; // 无线->有线：B 或 D
+                bool falling_raw = (_q4_prev_hasLine) && (!hasLine); // 有线->无线：C 或 A
+
+                bool rising = edge_ok && rising_raw;
+
+                bool falling = false;
+                constexpr uint8_t NO_LINE_N = 20;
+                if (_q4_state == Q4State::Arc_CB || _q4_state == Q4State::Arc_DA) {
+                    if (!hasLine) {
+                        if (_q4_noLine_cnt < 255) _q4_noLine_cnt++;
+                    } else {
+                        _q4_noLine_cnt = 0;
+                    }
+                    falling = edge_ok && (_q4_noLine_cnt >= NO_LINE_N);
+                } else {
+                    falling = edge_ok && falling_raw;
+                }
+
+                if (rising || falling) {
+                    _q4_last_edge_ms = now;
+                    _q4_noLine_cnt = 0;
+                }
+
+                switch (_q4_state) {
+                    case Q4State::Idle:
+                        q4_start_from_A();
+                        break;
+
+                    case Q4State::Straight_AC:
+                        setBaseSpeed(0.30f);
+                        driveStraightYawHold();
+                        if (falling) {
+                            // 到 C
+                            Prompt::once(120);
+                            _pidTurn.reset();
+                            q4_enter(Q4State::Arc_CB);
+                        }
+                        break;
+
+                    case Q4State::Arc_CB:
+                        setBaseSpeed(0.20f);
+                        driveArcLineFollow(raw);
+                        if (rising) {
+                            // 到 B
+                            Prompt::once(120);
+                            resetYawRef();
+                            q4_enter(Q4State::Straight_BD);
+                        }
+                        break;
+
+                    case Q4State::Straight_BD:
+                        setBaseSpeed(0.30f);
+                        driveStraightYawHold();
+                        if (rising) {
+                            // 到 D
+                            Prompt::once(120);
+                            _pidTurn.reset();
+                            q4_enter(Q4State::Arc_DA);
+                        }
+                        break;
+
+                    case Q4State::Arc_DA:
+                        setBaseSpeed(0.20f);
+                        driveArcLineFollow(raw);
+                        if (falling) {
+                            // 回到 A：计圈
+                            Prompt::once(120);
+
+                            _q4_lap++;
+                            if (_q4_lap >= Q4_LAPS) {
+                                q4_enter(Q4State::Done);
+                            } else {
+                                // 下一圈从 A->C 继续
+                                resetYawRef();
+                                q4_enter(Q4State::Straight_AC);
+                            }
+                        }
+                        break;
+
+                    case Q4State::Done:
+                        setSingleMotor(_ch_L1, _ch_L2, 0.0f);
+                        setSingleMotor(_ch_R1, _ch_R2, 0.0f);
+                        break;
+                }
+
+                _q4_prev_hasLine = hasLine;
+                break;
+            }
+
             default:
-                // 非1/2：不开车（或你想保留原case3/4逻辑可在这里继续写）
+                // 非1/2/3：不开车（或你想保留原case3/4逻辑可在这里继续写）
                 _q1_prev_hasLine = hasLine;
                 _q2_prev_hasLine = hasLine;
+                _q3_prev_hasLine = hasLine;
+                _q4_prev_hasLine = hasLine;
                 break;
         }
     }
