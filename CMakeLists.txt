@@ -53,8 +53,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Drivers/BSP/Inc/UartTxRingBuffer.hpp
         Drivers/BSP/Inc/DbgSerial.hpp
         Drivers/BSP/Src/DbgSerial.cpp
-        Drivers/BSP/ICM45686/IMU_Benchmark.c
-        Drivers/BSP/ICM45686/IMU_Benchmark.h
+        Drivers/BSP/Src/ICM45686.c
+        Drivers/BSP/Inc/ICM45686.h
 )
 
 # Add STM32CubeMX generated sources
@@ -72,10 +72,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         Drivers/BSP/SEGGER-RTT/SEGGER_RTT_printf.c
         Core/Src/app_entry.cpp
         Drivers/BSP/Src/button.cpp
-        Drivers/BSP/ICM45686/IMU.c
-        Drivers/BSP/ICM45686/inv_imu_transport.c
-        Drivers/BSP/ICM45686/inv_imu_driver.c
-        Drivers/BSP/ICM45686/read_aux_data_mode.c
         ${U8G2_SOURCES}
 )
 
@@ -85,7 +81,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         Drivers/BSP/SEGGER-RTT
         Drivers/BSP/Inc
         Core/Inc
-        Drivers/BSP/ICM45686
         Drivers/BSP/U8G2
 )
 

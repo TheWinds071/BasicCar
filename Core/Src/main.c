@@ -32,7 +32,7 @@
 #include "app_entry.h"
 #include "LineFollower_Interface.h"
 #include "App_PidConfig.h"
-#include "IMU.h"
+#include "ICM45686.h"
 #include "OLED.h"
 #include "u8g2.h"
 /* USER CODE END Includes */
