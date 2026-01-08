@@ -437,9 +437,20 @@ void GetAngle(const _st_Mpu *pMpu,_st_AngE *pAngE, float dt)
 		*(float *)pAngE = atan2f(2 * NumQ.q1 *NumQ.q2 + 2 * NumQ.q0 * NumQ.q3, 1 - 2 * NumQ.q2 *NumQ.q2 - 2 * NumQ.q3 * NumQ.q3) * RtA;  //yaw
 #else
 		float yaw_G = pMpu->gyroZ * Gyro_G;
-		if((yaw_G > 3.0f) || (yaw_G < -3.0f)) //数据太小可以认为是干扰，不是偏航动作
+		if((yaw_G > 1.0f) || (yaw_G < -1.0f)) //数据太小可以认为是干扰，不是偏航动作
 		{
-			pAngE->yaw  += yaw_G * dt;
+			pAngE->yaw  -= yaw_G * dt;
+
+		    // --- [Start] 修改：限制角度在 -180 到 180 之间 ---
+		    if (pAngE->yaw > 180.0f)
+		    {
+		        pAngE->yaw -= 360.0f;
+		    }
+		    else if (pAngE->yaw < -180.0f)
+		    {
+		        pAngE->yaw += 360.0f;
+		    }
+		    // --- [End] 修改结束 ---
 		}
 #endif
 		pAngE->pitch  =  asin(vecxZ)* RtA;

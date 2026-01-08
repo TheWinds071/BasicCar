@@ -429,9 +429,9 @@ int SEGGER_RTT_vprintf(unsigned BufferIndex, const char * sFormat, va_list * pPa
         _PrintInt(&BufferDesc, v, 10u, Precision, FieldWidth, FormatFlags); //显示整数，支持负数
         _StoreChar(&BufferDesc, '.');                                        //显示小数点
 
-        v = abs((int)(fv * 100));
-        v = v % 100;
-        _PrintInt(&BufferDesc, v, 10u, 2, FieldWidth, FormatFlags);          //显示小数点后两位
+        v = abs((int)(fv * 1000));
+        v = v % 1000;
+        _PrintInt(&BufferDesc, v, 10u, 3, FieldWidth, FormatFlags);          //显示小数点后两位
       }
           break;
 

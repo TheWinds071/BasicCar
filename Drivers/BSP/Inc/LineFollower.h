@@ -32,6 +32,9 @@ private:
 
     float _q2_yaw_A_deg = 0.0f;
 
+    // 新增：Q3 A->C 的目标航向（A 点启动瞬间）
+    float _q3_yaw_AC_deg = 0.0f;
+
     // ====== Arc 段丢线保持方向 ======
     float _arc_last_turn = 0.0f;   // 上一次有效循线的 turn_adjust（决定方向）
     uint8_t _arc_lost_cnt = 0;     // 连续丢线次数（20ms一次）
@@ -187,8 +190,8 @@ private:
             default: break;
         }
 
-        uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
-        g_dbgTx3.printf("[Q2] -> %s raw=0x%04X yaw=%.2f\r\n", name, raw, User_YPR[0]);
+        // uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
+        // g_dbgTx3.printf("[Q2] -> %s raw=0x%04X yaw=%.2f\r\n", name, raw, User_YPR[0]);
     }
 
     // ================== Q3 状态机：A->C->B->D->A ==================
@@ -226,8 +229,8 @@ private:
             default: break;
         }
 
-        uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
-        g_dbgTx3.printf("[Q3] -> %s raw=0x%04X yaw=%.2f\r\n", name, raw, User_YPR[0]);
+        // uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
+        // g_dbgTx3.printf("[Q3] -> %s raw=0x%04X yaw=%.2f\r\n", name, raw, User_YPR[0]);
     }
 
     // ================== Q4 状态机：按 Q3 路径跑 4 圈后停车 ==================
@@ -259,8 +262,8 @@ private:
             default: break;
         }
 
-        uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
-        g_dbgTx3.printf("[Q4] -> %s lap=%u raw=0x%04X yaw=%.2f\r\n", name, (unsigned)_q4_lap, raw, User_YPR[0]);
+        // uint16_t raw = (GPIOA->IDR) & LF_SENSOR_MASK;
+        // g_dbgTx3.printf("[Q4] -> %s lap=%u raw=0x%04X yaw=%.2f\r\n", name, (unsigned)_q4_lap, raw, User_YPR[0]);
     }
 
 
@@ -325,6 +328,7 @@ public:
     void q3_start_from_A() {
         _q3_prev_hasLine = false;
         _q3_last_edge_ms = HAL_GetTick(); // 避免刚切题误触发
+        _q3_yaw_AC_deg = User_YPR[0];
         resetYawRef();
         q3_enter(Q3State::Straight_AC);
 
@@ -400,7 +404,7 @@ public:
 
                 // 2) falling：在 Arc 段要求“连续丢线 N 次”才算（防止刚进B->C就短暂丢线）
                 bool falling = false;
-                constexpr uint8_t NO_LINE_N = 20; // 20ms周期下：约140ms丢线才算真正到点
+                constexpr uint8_t NO_LINE_N = 15; // 20ms周期下：约140ms丢线才算真正到点
 
                 if (_q2_state == Q2State::Arc_BC || _q2_state == Q2State::Arc_DA) {
                     if (!hasLine) {
@@ -428,7 +432,7 @@ public:
                         break;
 
                     case Q2State::Straight_AB:
-                        setBaseSpeed(0.30f);
+                        setBaseSpeed(0.25f);
                         driveStraightYawHold();
 
                         if (rising) { // 到 B
@@ -446,7 +450,7 @@ public:
                             Prompt::once(120);
                             //resetYawRef(); // 进入直线前重新锁航向
                             // C 点出来：直走目标角 = A 点出发角 + 172°，并归一化到 [-180, 180]
-                            float target = _q2_yaw_A_deg + 178.0f;
+                            float target = _q2_yaw_A_deg + 180.0f;
                             while (target > 180.0f) target -= 360.0f;
                             while (target < -180.0f) target += 360.0f;
                             setYawRefDeg(target);
@@ -455,7 +459,7 @@ public:
                         break;
 
                     case Q2State::Straight_CD:
-                        setBaseSpeed(0.30f);
+                        setBaseSpeed(0.25f);
                         driveStraightYawHold();
 
                         if (rising) { // 到 D
@@ -487,7 +491,7 @@ public:
 
             case 3: {
                 // Q3: A->C->B->D->A，每过点提示一次（状态机）
-                const uint32_t DEBOUNCE_MS = 200;
+                const uint32_t DEBOUNCE_MS = 150;
                 uint32_t now = HAL_GetTick();
                 bool edge_ok = (now - _q3_last_edge_ms) >= DEBOUNCE_MS;
 
@@ -497,7 +501,7 @@ public:
                 bool rising = edge_ok && rising_raw;
 
                 bool falling = false;
-                constexpr uint8_t NO_LINE_N = 20; // 20ms周期下约140ms丢线才认为真正到点
+                constexpr uint8_t NO_LINE_N = 15; // 20ms周期下约140ms丢线才认为真正到点
 
                 // 在半圆段用“连续丢线N次”判定 falling，更稳
                 if (_q3_state == Q3State::Arc_CB || _q3_state == Q3State::Arc_DA) {
@@ -523,10 +527,10 @@ public:
                         break;
 
                     case Q3State::Straight_AC:
-                        setBaseSpeed(0.30f);
+                        setBaseSpeed(0.25f);
                         driveStraightYawHold();
-                        if (falling) {
-                            // 到 C（有线->无线）
+                        if (rising) {
+                            // 到 C（无线->有线）
                             Prompt::once(120);
                             _pidTurn.reset();
                             q3_enter(Q3State::Arc_CB);
@@ -536,16 +540,20 @@ public:
                     case Q3State::Arc_CB:
                         setBaseSpeed(0.20f);
                         driveArcLineFollow(raw);
-                        if (rising) {
-                            // 到 B（无线->有线）
+                        if (falling) {
+                            // 到 B（有线->无线）
                             Prompt::once(120);
-                            resetYawRef();
+                            // 计算 B->D 直线目标角 = (A->C目标角) + 215°
+                            float target = _q3_yaw_AC_deg + 100.0f;
+                            while (target > 180.0f) target -= 360.0f;
+                            while (target < -180.0f) target += 360.0f;
+                            setYawRefDeg(target);              // ← 用目标角锁航向
                             q3_enter(Q3State::Straight_BD);
                         }
                         break;
 
                     case Q3State::Straight_BD:
-                        setBaseSpeed(0.30f);
+                        setBaseSpeed(0.25f);
                         driveStraightYawHold();
                         if (rising) {
                             // 到 D（无线->有线）
@@ -577,7 +585,7 @@ public:
 
             case 4: {
                 // Q4: 按 Q3 路径跑 4 圈后停车
-                const uint32_t DEBOUNCE_MS = 200;
+                const uint32_t DEBOUNCE_MS = 150;
                 uint32_t now = HAL_GetTick();
                 bool edge_ok = (now - _q4_last_edge_ms) >= DEBOUNCE_MS;
 
@@ -587,7 +595,7 @@ public:
                 bool rising = edge_ok && rising_raw;
 
                 bool falling = false;
-                constexpr uint8_t NO_LINE_N = 20;
+                constexpr uint8_t NO_LINE_N = 15;
                 if (_q4_state == Q4State::Arc_CB || _q4_state == Q4State::Arc_DA) {
                     if (!hasLine) {
                         if (_q4_noLine_cnt < 255) _q4_noLine_cnt++;
@@ -610,7 +618,7 @@ public:
                         break;
 
                     case Q4State::Straight_AC:
-                        setBaseSpeed(0.30f);
+                        setBaseSpeed(0.25f);
                         driveStraightYawHold();
                         if (falling) {
                             // 到 C
@@ -632,7 +640,7 @@ public:
                         break;
 
                     case Q4State::Straight_BD:
-                        setBaseSpeed(0.30f);
+                        setBaseSpeed(0.25f);
                         driveStraightYawHold();
                         if (rising) {
                             // 到 D
