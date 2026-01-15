@@ -100,9 +100,9 @@ BasicCar 是一个基于 STM32H750VBT6 高性能微控制器的智能寻线小�
 
 | 外设 | 接口 | 用途 | 引脚 |
 |------|------|------|------|
-| 灰度传感器 | GPIO | 5路寻线传感器（检测弧线轨迹） | PA15, PA12, PA11, PA10, PA8 |
+| 灰度传感器 | GPIO | 5路寻线传感器（检测弧线轨迹）<br/>从左到右: PA15→PA12→PA11→PA10→PA8 | PA15, PA12, PA11, PA10, PA8 |
 | 电机驱动 | TIM1 PWM | 双电机差速控制 | - |
-| Flash 存储 | SPI2 | W25Q64 PID参数存储 | SPI2_CS |
+| Flash 存储 | SPI2 | W25Q64 (64Mbit) PID参数存储 | SPI2_CS |
 | IMU传感器 | SPI6 | ICM45686 九轴传感器（航向保持） | SPI6 |
 | OLED显示屏 | I2C4 | SSD1306 (128x64) 状态显示 | I2C4 (0x78) |
 | 串口通信 | USART3 | PID参数配置 | - |
@@ -218,9 +218,10 @@ setEndSpeed(turn_adjust, 0.0f);  // 纯循线转向
 ```
 PA15    PA12  PA11  PA10  PA8
  -4      -2     0     2     4  (权重)
+左侧            中心           右侧
 ```
 - 5 路灰度传感器检测黑色弧线
-- 加权平均计算位置偏差
+- 加权平均计算位置偏差（对称权重配置）
 - 支持短暂丢线保持方向（弧线段稳定性优化）
 
 **状态机实现**:
@@ -896,10 +897,12 @@ TheWinds071
 
 ## 参考资料
 
-- [2024年全国大学生电子设计竞赛赛题](https://nuedc.sjtu.edu.cn/)
-- [STM32H7 参考手册](https://www.st.com/en/microcontrollers-microprocessors/stm32h7-series.html)
-- [U8G2 图形库文档](https://github.com/olikraus/u8g2)
-- [ICM-45686 数据手册](https://invensense.tdk.com/)
+- [全国大学生电子设计竞赛官网](http://www.nuedc.com.cn/)
+- [STM32H7 系列产品页](https://www.st.com/en/microcontrollers-microprocessors/stm32h7-series.html)
+- [U8G2 图形库 GitHub](https://github.com/olikraus/u8g2)
+- [ICM-45686 产品信息](https://invensense.tdk.com/)
+
+**注**: 具体赛题文档请参考竞赛组委会官方发布资料。
 
 ---
 
