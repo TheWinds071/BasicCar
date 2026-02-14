@@ -587,6 +587,7 @@ public:
             case 4: {
                 // Q4: A->C->B->D->A
                 // Q4: 按 Q3 路径跑 4 圈后停车
+                //
                 const uint32_t DEBOUNCE_MS = 200;
                 uint32_t now = HAL_GetTick();
                 bool edge_ok = (now - _q4_last_edge_ms) >= DEBOUNCE_MS;
